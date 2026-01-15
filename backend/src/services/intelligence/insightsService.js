@@ -1,0 +1,153 @@
+import config from '../../config/index.js';
+import llmService from '../understanding/llmService.js';
+import PatternModel from '../../models/pattern.model.js';
+
+class InsightsService {
+    /**
+     * Fetch patterns from Python analytics service
+     */
+    async fetchPatternsFromAnalytics(userId) {
+        const analyticsUrl = process.env.ANALYTICS_SERVICE_URL || 'http://localhost:8001';
+
+        try {
+            const response = await fetch(`${analyticsUrl}/api/v1/patterns/${userId}`);
+
+            if (!response.ok) {
+                throw new Error(`Analytics service error: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return data.data; // { frequency_patterns: [...], time_patterns: [...] }
+        } catch (error) {
+            console.error('Failed to fetch from analytics:', error);
+            return { frequency_patterns: [], time_patterns: [] };
+        }
+    }
+
+    /**
+     * Convert Python patterns to natural language insights using LLM
+     */
+    async generateInsightFromPattern(pattern) {
+        const prompt = `
+You are a personal AI assistant. Convert this statistical pattern into a friendly, encouraging insight.
+
+Pattern Type: ${pattern.pattern_type}
+Category: ${pattern.category}
+Activity: ${pattern.activity || 'N/A'}
+Data: ${JSON.stringify(pattern)}
+
+Generate a single short sentence (max 20 words) that:
+- Sounds personal and encouraging
+- Highlights the pattern naturally
+- Feels like a friend noticing something about you
+
+Examples:
+- "You're crushing it with workouts - 4 times a week! That's consistency 💪"
+- "Mornings are your meditation sweet spot - you nail it at 6 AM ✨"
+- "Your gym routine is rock solid - every other day like clockwork 🔥"
+
+Now generate for the given pattern. Return ONLY the insight text, nothing else.
+`;
+
+        try {
+            const insight = await llmService.generateResponse('pattern_insight', { pattern });
+            return insight || pattern.description; // Fallback to raw description
+        } catch (error) {
+            console.error('LLM insight generation failed:', error);
+            return pattern.description;
+        }
+    }
+
+    /**
+     * Get insights for user (with caching)
+     */
+    async getUserInsights(userId, forceRefresh = false) {
+        // 1. Check if we have cached patterns (less than 24 hours old)
+        if (!forceRefresh) {
+            const cached = await PatternModel.findByUser(userId);
+
+            const recentCached = cached.filter(p => {
+                const ageHours = (Date.now() - new Date(p.last_validated_at).getTime()) / (1000 * 60 * 60);
+                return ageHours < 24;
+            });
+
+            if (recentCached.length > 0) {
+                console.log(`Using ${recentCached.length} cached patterns for user ${userId}`);
+                return recentCached.map(p => ({
+                    id: p.id,
+                    type: p.pattern_type,
+                    category: p.category,
+                    insight: p.description,
+                    confidence: parseFloat(p.confidence_score),
+                    isNew: false,
+                    lastUpdated: p.last_validated_at
+                }));
+            }
+        }
+
+        // 2. Fetch fresh patterns from Python analytics
+        console.log(`Fetching fresh patterns from Python service for user ${userId}`);
+        const analyticsPatterns = await this.fetchPatternsFromAnalytics(userId);
+
+        // 3. Combine all pattern types
+        const allPatterns = [
+            ...analyticsPatterns.frequency_patterns || [],
+            ...analyticsPatterns.time_patterns || []
+        ];
+
+        if (allPatterns.length === 0) {
+            return [];
+        }
+
+        // 4. Generate natural language insights using LLM
+        const insightsPromises = allPatterns.map(async pattern => {
+            const naturalLanguage = await this.generateInsightFromPattern(pattern);
+
+            // 5. Store in database for caching
+            const storedPattern = await PatternModel.upsert({
+                userId,
+                category: pattern.category,
+                patternType: pattern.pattern_type,
+                description: naturalLanguage,
+                supportingMemories: [],
+                confidenceScore: pattern.confidence || 0.7,
+                isActionable: false
+            });
+
+            return {
+                id: storedPattern.id,
+                type: pattern.pattern_type,
+                category: pattern.category,
+                insight: naturalLanguage,
+                confidence: pattern.confidence || 0.7,
+                rawData: pattern,
+                isNew: true,
+                lastUpdated: storedPattern.last_validated_at
+            };
+        });
+
+        const insights = await Promise.all(insightsPromises);
+
+        // 6. Clean up old patterns
+        await PatternModel.cleanupStale(userId, 30);
+
+        return insights.sort((a, b) => b.confidence - a.confidence);
+    }
+
+    /**
+     * Get single category insights
+     */
+    async getCategoryInsights(userId, category) {
+        const allInsights = await this.getUserInsights(userId);
+        return allInsights.filter(i => i.category === category);
+    }
+
+    /**
+     * Force refresh insights (bypass cache)
+     */
+    async refreshInsights(userId) {
+        return this.getUserInsights(userId, true);
+    }
+}
+
+export default new InsightsService();

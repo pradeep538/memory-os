@@ -1,0 +1,24 @@
+{
+    "testEnvironment": "node",
+    "transform": {},
+    "injectGlobals": true,
+    "testMatch": [
+        "**/tests/**/*.test.js"
+    ],
+    "collectCoverageFrom": [
+        "src/modules/**/*.js",
+        "!src/modules/**/index.js"
+    ],
+    "coverageThreshold": {
+        "global": {
+            "branches": 80,
+            "functions": 80,
+            "lines": 85,
+            "statements": 85
+        }
+    },
+    "moduleNameMapper": {
+        "^(\\.{1,2}/.*)\\.js$": "$1"
+    },
+    "testTimeout": 10000
+}

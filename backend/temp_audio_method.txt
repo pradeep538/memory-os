@@ -1,0 +1,111 @@
+    /**
+     * Process audio input with Gemini native audio support
+     * POST /api/v1/input/audio
+     */
+    async processAudio(request, reply) {
+        try {
+            const userId = '00000000-0000-0000-0000-000000000000'; // TODO: Get from auth
+
+            // Get audio file from multipart
+            const data = await request.file();
+
+            if (!data) {
+                return reply.code(400).send({
+                    success: false,
+                    error: 'No audio file uploaded'
+                });
+            }
+
+            // Read audio buffer
+            const audioBuffer = await data.toBuffer();
+
+            // Validate audio size (max 10MB)
+            if (audioBuffer.length > 10 * 1024 * 1024) {
+                return reply.code(400).send({
+                    success: false,
+                    error: 'Audio file too large (max 10MB)'
+                });
+            }
+
+            // Get metadata
+            const duration = parseInt(data.fields?.duration?.value || '6');
+            const mimeType = data.mimetype || 'audio/webm';
+
+            request.log.info(`Processing audio: ${mimeType}, ${duration}s, ${audioBuffer.length} bytes`);
+
+            // Import audio enhancement service
+            const audioEnhancementService = (await import('../../services/input/audioEnhancementService.js')).default;
+
+            // Process with Gemini native audio
+            const enhancement = await audioEnhancementService.enhanceFromAudio(
+                audioBuffer,
+                mimeType,
+                duration
+            );
+
+            if (!enhancement.success) {
+                return reply.code(400).send({
+                    success: false,
+                    error: enhancement.error || 'Audio processing failed',
+                    needs_rephrase: true
+                });
+            }
+
+            // Check confidence
+            const CONFIDENCE_THRESHOLD = 0.8;
+            const needsConfirmation = enhancement.confidence < CONFIDENCE_THRESHOLD;
+
+            // Low confidence - return for confirmation
+            if (needsConfirmation) {
+                return reply.code(200).send({
+                    success: false,
+                    needs_confirmation: true,
+                    transcription: enhancement.transcription,
+                    raw_text: enhancement.transcription,
+                    enhanced_text: enhancement.enhanced_text,
+                    detected_category: enhancement.detected_category,
+                    detected_entities: enhancement.detected_entities,
+                    confidence: enhancement.confidence,
+                    confidence_level: this.getConfidenceLevel(enhancement.confidence),
+                    audio_quality: enhancement.audio_quality,
+                    reasoning: enhancement.reasoning
+                });
+            }
+
+            // High confidence - auto-process
+            const memory = await this.createMemoryFromEnhancement(
+                userId,
+                {
+                    ...enhancement,
+                    raw_text: enhancement.transcription
+                },
+                'voice'
+            );
+
+            reply.code(201).send({
+                success: true,
+                auto_processed: true,
+                memory,
+                transcription: enhancement.transcription,
+                enhancement: {
+                    raw_text: enhancement.transcription,
+                    enhanced_text: enhancement.enhanced_text,
+                    confidence: enhancement.confidence
+                },
+                audio_quality: enhancement.audio_quality,
+                confirmation: `✓ Logged! ${enhancement.enhanced_text}`
+            });
+
+        } catch (error) {
+            request.log.error(error);
+
+            const statusCode = error.message.includes('limit') ? 429
+                : error.message.includes('Invalid') ? 400
+                    : 500;
+
+            reply.code(statusCode).send({
+                success: false,
+                error: error.message
+            });
+        }
+    }

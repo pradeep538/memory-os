@@ -1,0 +1,133 @@
+import db from '../db/index.js';
+
+class PatternModel {
+    /**
+     * Create or update a pattern
+     */
+    static async upsert(patternData) {
+        const {
+            userId,
+            category,
+            patternType,
+            description,
+            supportingMemories,
+            confidenceScore,
+            isActionable
+        } = patternData;
+
+        // Check if pattern already exists
+        const existing = await this.findByTypeAndCategory(userId, patternType, category);
+
+        if (existing) {
+            // Update existing pattern
+            const query = `
+        UPDATE patterns
+        SET description = $1,
+            supporting_memories = $2,
+            confidence_score = $3,
+            last_validated_at = NOW(),
+            is_actionable = $4
+        WHERE id = $5
+        RETURNING *
+      `;
+
+            const result = await db.query(query, [
+                description,
+                supportingMemories || [],
+                confidenceScore,
+                isActionable || false,
+                existing.id
+            ]);
+
+            return result.rows[0];
+        } else {
+            // Create new pattern
+            const query = `
+        INSERT INTO patterns (
+          user_id, category, pattern_type, description,
+          supporting_memories, confidence_score, is_actionable
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
+      `;
+
+            const result = await db.query(query, [
+                userId,
+                category,
+                patternType,
+                description,
+                supportingMemories || [],
+                confidenceScore,
+                isActionable || false
+            ]);
+
+            return result.rows[0];
+        }
+    }
+
+    /**
+     * Find pattern by type and category
+     */
+    static async findByTypeAndCategory(userId, patternType, category) {
+        const query = `
+      SELECT * FROM patterns
+      WHERE user_id = $1 
+        AND pattern_type = $2
+        AND category = $3
+        AND status = 'active'
+      ORDER BY last_validated_at DESC
+      LIMIT 1
+    `;
+
+        const result = await db.query(query, [userId, patternType, category]);
+        return result.rows[0];
+    }
+
+    /**
+     * Get all active patterns for user
+     */
+    static async findByUser(userId, filters = {}) {
+        let query = `
+      SELECT * FROM patterns
+      WHERE user_id = $1 AND status = 'active'
+    `;
+        const values = [userId];
+        let paramIndex = 2;
+
+        if (filters.category) {
+            query += ` AND category = $${paramIndex}`;
+            values.push(filters.category);
+            paramIndex++;
+        }
+
+        if (filters.patternType) {
+            query += ` AND pattern_type = $${paramIndex}`;
+            values.push(filters.patternType);
+            paramIndex++;
+        }
+
+        query += ' ORDER BY confidence_score DESC, last_validated_at DESC';
+
+        const result = await db.query(query, values);
+        return result.rows;
+    }
+
+    /**
+     * Delete old/stale patterns
+     */
+    static async cleanupStale(userId, daysOld = 30) {
+        const query = `
+      UPDATE patterns
+      SET status = 'dismissed'
+      WHERE user_id = $1
+        AND last_validated_at < NOW() - INTERVAL '${daysOld} days'
+        AND status = 'active'
+      RETURNING id
+    `;
+
+        const result = await db.query(query, [userId]);
+        return result.rows.length;
+    }
+}
+
+export default PatternModel;
