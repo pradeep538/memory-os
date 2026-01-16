@@ -5,138 +5,97 @@ import '../../config/app_typography.dart';
 import '../../config/app_spacing.dart';
 import '../../config/config.dart';
 
-/// Example inputs for marquee discovery system
 class MarqueeExample {
   final String text;
   final String category;
-  final String categoryIcon;
 
-  const MarqueeExample({
-    required this.text,
-    required this.category,
-    required this.categoryIcon,
-  });
+  const MarqueeExample(this.text, this.category);
 }
 
-const List<MarqueeExample> _examples = [
-  // Fitness
-  MarqueeExample(text: 'Went to gym for leg workout 1 hour', category: 'fitness', categoryIcon: '💪'),
-  MarqueeExample(text: 'Did chest workout, energy level 9', category: 'fitness', categoryIcon: '💪'),
-  MarqueeExample(text: 'Ran 5k in 28 minutes', category: 'fitness', categoryIcon: '💪'),
-  // Finance
-  MarqueeExample(text: 'Spent \$45 on groceries', category: 'finance', categoryIcon: '💵'),
-  MarqueeExample(text: 'Coffee \$4.50', category: 'finance', categoryIcon: '💵'),
-  MarqueeExample(text: 'Got paid \$2500 salary', category: 'finance', categoryIcon: '💵'),
-  // Health
-  MarqueeExample(text: 'Slept 7.5 hours, felt refreshed', category: 'health', categoryIcon: '❤️'),
-  MarqueeExample(text: 'Blood pressure 120/80', category: 'health', categoryIcon: '❤️'),
-  MarqueeExample(text: 'Took ibuprofen 200mg', category: 'health', categoryIcon: '❤️'),
-  // Mindfulness
-  MarqueeExample(text: 'Meditated for 15 minutes', category: 'mindfulness', categoryIcon: '🧘'),
-  MarqueeExample(text: 'Feeling calm and focused', category: 'mindfulness', categoryIcon: '🧘'),
-  MarqueeExample(text: 'Grateful for family time', category: 'mindfulness', categoryIcon: '🧘'),
-  // Routine
-  MarqueeExample(text: 'Morning meditation complete', category: 'routine', categoryIcon: '📅'),
-  MarqueeExample(text: 'Took vitamins and breakfast', category: 'routine', categoryIcon: '📅'),
-  MarqueeExample(text: 'Evening walk done', category: 'routine', categoryIcon: '📅'),
-  // Generic
-  MarqueeExample(text: 'Meeting with Sarah, discussed project', category: 'generic', categoryIcon: '📝'),
-  MarqueeExample(text: 'Read 30 pages of book', category: 'generic', categoryIcon: '📝'),
-];
-
-/// Rotating marquee widget showing example inputs
 class MarqueeExamples extends StatefulWidget {
-  final ValueChanged<MarqueeExample>? onExampleTap;
-  final bool asPlaceholder;
+  final Function(MarqueeExample) onExampleTap;
 
-  const MarqueeExamples({
-    super.key,
-    this.onExampleTap,
-    this.asPlaceholder = false,
-  });
+  const MarqueeExamples({super.key, required this.onExampleTap});
 
   @override
   State<MarqueeExamples> createState() => _MarqueeExamplesState();
 }
 
-class _MarqueeExamplesState extends State<MarqueeExamples>
-    with SingleTickerProviderStateMixin {
+class _MarqueeExamplesState extends State<MarqueeExamples> {
+  final List<MarqueeExample> _examples = const [
+    MarqueeExample('Had a coffee at Starbucks for \$5', 'finance'),
+    MarqueeExample('Ran 5km in the park this morning', 'fitness'),
+    MarqueeExample('Feeling anxious about the deadline', 'mindfulness'),
+    MarqueeExample('Meeting with John at 2pm', 'routine'),
+    MarqueeExample('Took my vitamins today', 'health'),
+    MarqueeExample('Read 10 pages of Atomic Habits', 'personal_growth'),
+  ];
+
   int _currentIndex = 0;
   Timer? _timer;
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _fadeAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(_fadeController);
     _startRotation();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    _fadeController.dispose();
     super.dispose();
   }
 
   void _startRotation() {
     _timer = Timer.periodic(Config.marqueeInterval, (_) {
-      _fadeController.forward().then((_) {
+      if (mounted) {
         setState(() {
           _currentIndex = (_currentIndex + 1) % _examples.length;
         });
-        _fadeController.reverse();
-      });
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final example = _examples[_currentIndex];
-    final categoryColor = AppColors.getCategoryColor(example.category);
-
-    if (widget.asPlaceholder) {
-      return FadeTransition(
-        opacity: ReverseAnimation(_fadeAnimation),
-        child: Text(
-          'Try: "${example.text}"',
-          style: AppTypography.inputHint,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      );
-    }
+    final categoryColor = _getCategoryColor(example.category);
 
     return GestureDetector(
-      onTap: () => widget.onExampleTap?.call(example),
-      child: FadeTransition(
-        opacity: ReverseAnimation(_fadeAnimation),
+      onTap: () => widget.onExampleTap(example),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 600),
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          return FadeTransition(opacity: animation, child: child);
+        },
         child: Container(
+          key: ValueKey<int>(_currentIndex),
+          margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
             vertical: AppSpacing.sm,
           ),
           decoration: BoxDecoration(
-            color: AppColors.getCategoryLightColor(example.category),
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            color: categoryColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            border: Border.all(color: categoryColor.withOpacity(0.2)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                example.categoryIcon,
-                style: const TextStyle(fontSize: 14),
+              Icon(
+                Icons.lightbulb_outline_rounded,
+                size: 16,
+                color: categoryColor,
               ),
               const SizedBox(width: AppSpacing.sm),
               Flexible(
                 child: Text(
-                  '"${example.text}"',
-                  style: AppTypography.bodySmall.copyWith(color: categoryColor),
+                  example.text,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.textPrimary.withOpacity(0.8),
+                    fontStyle: FontStyle.italic,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -146,5 +105,22 @@ class _MarqueeExamplesState extends State<MarqueeExamples>
         ),
       ),
     );
+  }
+
+  Color _getCategoryColor(String category) {
+    switch (category) {
+      case 'finance':
+        return AppColors.finance;
+      case 'fitness':
+        return AppColors.fitness;
+      case 'health':
+        return AppColors.health;
+      case 'mindfulness':
+        return AppColors.mindfulness;
+      case 'routine':
+        return AppColors.routine;
+      default:
+        return AppColors.primary;
+    }
   }
 }

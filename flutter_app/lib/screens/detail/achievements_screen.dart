@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../config/app_colors.dart';
 import '../../config/app_typography.dart';
 import '../../config/app_spacing.dart';
-import '../../providers/app_provider.dart';
 
 /// Achievement model
 class Achievement {

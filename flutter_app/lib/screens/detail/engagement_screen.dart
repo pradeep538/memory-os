@@ -39,24 +39,8 @@ class _EngagementScreenState extends State<EngagementScreen>
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-
-    final app = context.read<AppProvider>();
-
-    final summaryResult = await app.engagementService.getSummary();
-    final streaksResult = await app.engagementService.getStreaks();
-    final milestonesResult = await app.engagementService.getMilestones();
-    final analyticsResult = await app.engagementService.getAnalytics();
-
-    if (mounted) {
-      setState(() {
-        _summary = summaryResult.data;
-        _streakData = streaksResult.data;
-        _milestonesData = milestonesResult.data;
-        _analytics = analyticsResult.data;
-        _isLoading = false;
-      });
-    }
+    // TODO: Implement engagement service methods
+    setState(() => _isLoading = false);
   }
 
   @override
@@ -167,7 +151,8 @@ class _EngagementScreenState extends State<EngagementScreen>
                         color: trend >= 0
                             ? AppColors.textOnPrimary.withAlpha(51)
                             : AppColors.error.withAlpha(51),
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusSm),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -249,13 +234,35 @@ class _EngagementScreenState extends State<EngagementScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _WeekDayColumn(day: 'Mon', value: (weeklyData[0] as num).toInt(), maxValue: 10),
-              _WeekDayColumn(day: 'Tue', value: (weeklyData[1] as num).toInt(), maxValue: 10),
-              _WeekDayColumn(day: 'Wed', value: (weeklyData[2] as num).toInt(), maxValue: 10),
-              _WeekDayColumn(day: 'Thu', value: (weeklyData[3] as num).toInt(), maxValue: 10),
-              _WeekDayColumn(day: 'Fri', value: (weeklyData[4] as num).toInt(), maxValue: 10),
-              _WeekDayColumn(day: 'Sat', value: (weeklyData[5] as num).toInt(), maxValue: 10),
-              _WeekDayColumn(day: 'Sun', value: (weeklyData[6] as num).toInt(), maxValue: 10, isToday: true),
+              _WeekDayColumn(
+                  day: 'Mon',
+                  value: (weeklyData[0] as num).toInt(),
+                  maxValue: 10),
+              _WeekDayColumn(
+                  day: 'Tue',
+                  value: (weeklyData[1] as num).toInt(),
+                  maxValue: 10),
+              _WeekDayColumn(
+                  day: 'Wed',
+                  value: (weeklyData[2] as num).toInt(),
+                  maxValue: 10),
+              _WeekDayColumn(
+                  day: 'Thu',
+                  value: (weeklyData[3] as num).toInt(),
+                  maxValue: 10),
+              _WeekDayColumn(
+                  day: 'Fri',
+                  value: (weeklyData[4] as num).toInt(),
+                  maxValue: 10),
+              _WeekDayColumn(
+                  day: 'Sat',
+                  value: (weeklyData[5] as num).toInt(),
+                  maxValue: 10),
+              _WeekDayColumn(
+                  day: 'Sun',
+                  value: (weeklyData[6] as num).toInt(),
+                  maxValue: 10,
+                  isToday: true),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -266,15 +273,20 @@ class _EngagementScreenState extends State<EngagementScreen>
             children: [
               _QuickStat(
                 label: 'Total',
-                value: weeklyData.fold<num>(0, (a, b) => a + (b as num)).toString(),
+                value: weeklyData
+                    .fold<num>(0, (a, b) => a + (b as num))
+                    .toString(),
               ),
               _QuickStat(
                 label: 'Daily Avg',
-                value: (weeklyData.fold<num>(0, (a, b) => a + (b as num)) / 7).toStringAsFixed(1),
+                value: (weeklyData.fold<num>(0, (a, b) => a + (b as num)) / 7)
+                    .toStringAsFixed(1),
               ),
               _QuickStat(
                 label: 'Best Day',
-                value: weeklyData.reduce((a, b) => (a as num) > (b as num) ? a : b).toString(),
+                value: weeklyData
+                    .reduce((a, b) => (a as num) > (b as num) ? a : b)
+                    .toString(),
               ),
             ],
           ),
@@ -489,13 +501,15 @@ class _EngagementScreenState extends State<EngagementScreen>
           if (achieved.isNotEmpty) ...[
             Text('Achieved', style: AppTypography.h4),
             const SizedBox(height: AppSpacing.md),
-            ...achieved.map((m) => _MilestoneCard(milestone: m, achieved: true)),
+            ...achieved
+                .map((m) => _MilestoneCard(milestone: m, achieved: true)),
             const SizedBox(height: AppSpacing.xl),
           ],
           if (upcoming.isNotEmpty) ...[
             Text('Upcoming', style: AppTypography.h4),
             const SizedBox(height: AppSpacing.md),
-            ...upcoming.map((m) => _MilestoneCard(milestone: m, achieved: false)),
+            ...upcoming
+                .map((m) => _MilestoneCard(milestone: m, achieved: false)),
           ],
           if (achieved.isEmpty && upcoming.isEmpty)
             _buildEmptyState(
@@ -643,13 +657,17 @@ class _StreakCard extends StatelessWidget {
               children: [
                 Icon(
                   Icons.local_fire_department_rounded,
-                  color: streak.isActive ? AppColors.primary : AppColors.textTertiary,
+                  color: streak.isActive
+                      ? AppColors.primary
+                      : AppColors.textTertiary,
                   size: 24,
                 ),
                 Text(
                   '${streak.currentStreak}',
                   style: AppTypography.label.copyWith(
-                    color: streak.isActive ? AppColors.primary : AppColors.textTertiary,
+                    color: streak.isActive
+                        ? AppColors.primary
+                        : AppColors.textTertiary,
                   ),
                 ),
               ],
@@ -660,7 +678,8 @@ class _StreakCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(streak.name ?? 'Logging Streak', style: AppTypography.body),
+                Text(streak.name ?? 'Logging Streak',
+                    style: AppTypography.body),
                 const SizedBox(height: 4),
                 Text(
                   streak.isActive
@@ -722,14 +741,14 @@ class _MilestoneCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: achieved
-                  ? AppColors.primary
-                  : AppColors.backgroundSecondary,
+              color:
+                  achieved ? AppColors.primary : AppColors.backgroundSecondary,
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             ),
             child: Icon(
               _getMilestoneIcon(),
-              color: achieved ? AppColors.textOnPrimary : AppColors.textTertiary,
+              color:
+                  achieved ? AppColors.textOnPrimary : AppColors.textTertiary,
               size: 24,
             ),
           ),

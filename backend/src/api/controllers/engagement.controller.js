@@ -10,7 +10,7 @@ class EngagementController {
      */
     async getEngagement(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
             const engagement = await engagementService.getUserEngagement(userId);
 
@@ -32,7 +32,7 @@ class EngagementController {
      */
     async getEngagementSummary(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
             const summary = await engagementService.getEngagementSummary(userId);
 
@@ -54,7 +54,7 @@ class EngagementController {
      */
     async getAnalytics(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
             const { days } = request.query;
 
             const analytics = await engagementService.getEngagementAnalytics(
@@ -80,7 +80,7 @@ class EngagementController {
      */
     async getStreaks(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
             const streaks = await engagementService.getStreakHistory(userId);
 
@@ -102,7 +102,7 @@ class EngagementController {
      */
     async getMilestones(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
             const milestones = await engagementService.getMilestones(userId);
 
@@ -148,7 +148,7 @@ class EngagementController {
      */
     async refreshScore(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
             const engagement = await engagementService.updateEngagementScore(userId);
 

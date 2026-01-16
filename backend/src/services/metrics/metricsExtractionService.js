@@ -1,4 +1,4 @@
-import db from '../db/index.js';
+import db from '../../db/index.js';
 
 /**
  * Metrics Extraction Service
@@ -78,6 +78,13 @@ class MetricsExtractionService {
         if (data.subcategory) {
             const subTags = data.subcategory.toLowerCase().split(/[\s,]+/);
             metrics.tags.push(...subTags.slice(0, 2));
+        }
+
+        // Default if no specific quantitative metric found
+        if (!metrics.metric_type) {
+            metrics.metric_type = 'workout_log';
+            metrics.numeric_value = 1;
+            metrics.unit = 'count';
         }
 
         return metrics;

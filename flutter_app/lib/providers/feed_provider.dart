@@ -38,11 +38,7 @@ class FeedWidgetData {
     this.isNew = false,
   });
 
-  FeedWidgetData copyWith({
-    double? priority,
-    dynamic data,
-    bool? isNew,
-  }) {
+  FeedWidgetData copyWith({double? priority, dynamic data, bool? isNew}) {
     return FeedWidgetData(
       type: type,
       id: id,
@@ -61,6 +57,7 @@ class FeedProvider extends ChangeNotifier {
   final InsightsService _insightsService;
   final EngagementService _engagementService;
   final NotificationsService _notificationsService;
+  final FeatureFlagService _featureFlagService;
 
   FeedProvider({
     required MemoryService memoryService,
@@ -68,11 +65,13 @@ class FeedProvider extends ChangeNotifier {
     required InsightsService insightsService,
     required EngagementService engagementService,
     required NotificationsService notificationsService,
+    required FeatureFlagService featureFlagService,
   })  : _memoryService = memoryService,
         _habitsService = habitsService,
         _insightsService = insightsService,
         _engagementService = engagementService,
-        _notificationsService = notificationsService;
+        _notificationsService = notificationsService,
+        _featureFlagService = featureFlagService;
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -168,10 +167,11 @@ class FeedProvider extends ChangeNotifier {
   }
 
   Future<void> _loadEngagement() async {
-    final response = await _engagementService.getSummary();
-    if (response.success && response.data != null) {
-      _engagementSummary = response.data;
-    }
+    // TODO: Implement getSummary in EngagementService
+    // final response = await _engagementService.getSummary();
+    // if (response.success && response.data != null) {
+    //   _engagementSummary = response.data;
+    // }
   }
 
   Future<void> _loadNotifications() async {
@@ -198,119 +198,161 @@ class FeedProvider extends ChangeNotifier {
     final isMorning = hour >= 7 && hour < 10;
     final isEvening = hour >= 17 && hour < 21;
 
-    // Habits Checklist - high priority in morning
-    if (_habits.isNotEmpty) {
+    // Habits Checklist
+    // Show if: Has Habits OR Feature Flag says visible (Promo/Onboarding)
+    final showHabits = _habits.isNotEmpty ||
+        _featureFlagService.isFeatureVisible('widget_habits');
+
+    if (showHabits) {
       final completedToday = _habits.where((h) => h.currentStreak > 0).length;
-      newWidgets.add(FeedWidgetData(
-        type: FeedWidgetType.habitsChecklist,
-        id: 'habits_checklist',
-        priority: isMorning ? 0.95 : 0.75,
-        lastUpdated: now,
-        data: {
-          'habits': _habits,
-          'completedToday': completedToday,
-          'total': _habits.length,
-        },
-      ));
+      newWidgets.add(
+        FeedWidgetData(
+          type: FeedWidgetType.habitsChecklist,
+          id: 'habits_checklist',
+          priority: isMorning ? 0.95 : 0.75,
+          lastUpdated: now,
+          data: {
+            'habits': _habits,
+            'completedToday': completedToday,
+            'total': _habits.length,
+          },
+        ),
+      );
     }
 
     // Recent Memories - always relevant
     if (_recentMemories.isNotEmpty) {
-      newWidgets.add(FeedWidgetData(
-        type: FeedWidgetType.recentMemories,
-        id: 'recent_memories',
-        priority: 0.80,
-        lastUpdated: now,
-        data: _recentMemories,
-      ));
+      newWidgets.add(
+        FeedWidgetData(
+          type: FeedWidgetType.recentMemories,
+          id: 'recent_memories',
+          priority: 0.80,
+          lastUpdated: now,
+          data: _recentMemories,
+        ),
+      );
     }
 
     // Engagement Score - higher in evening
     if (_engagementSummary != null) {
-      newWidgets.add(FeedWidgetData(
-        type: FeedWidgetType.engagementScore,
-        id: 'engagement_score',
-        priority: isEvening ? 0.85 : 0.70,
-        lastUpdated: now,
-        data: _engagementSummary,
-      ));
+      newWidgets.add(
+        FeedWidgetData(
+          type: FeedWidgetType.engagementScore,
+          id: 'engagement_score',
+          priority: isEvening ? 0.85 : 0.70,
+          lastUpdated: now,
+          data: _engagementSummary,
+        ),
+      );
     }
 
     // Category summaries based on stats
     if (_categoryStats['fitness'] != null && _categoryStats['fitness']! > 0) {
-      newWidgets.add(FeedWidgetData(
-        type: FeedWidgetType.fitnessSummary,
-        id: 'fitness_summary',
-        priority: 0.65,
-        lastUpdated: now,
-        data: _recentMemories.where((m) => m.category == 'fitness').take(5).toList(),
-      ));
+      newWidgets.add(
+        FeedWidgetData(
+          type: FeedWidgetType.fitnessSummary,
+          id: 'fitness_summary',
+          priority: 0.65,
+          lastUpdated: now,
+          data: _recentMemories
+              .where((m) => m.category == 'fitness')
+              .take(5)
+              .toList(),
+        ),
+      );
     }
 
     if (_categoryStats['finance'] != null && _categoryStats['finance']! > 0) {
-      newWidgets.add(FeedWidgetData(
-        type: FeedWidgetType.financeSummary,
-        id: 'finance_summary',
-        priority: isEvening ? 0.70 : 0.60,
-        lastUpdated: now,
-        data: _recentMemories.where((m) => m.category == 'finance').take(5).toList(),
-      ));
+      newWidgets.add(
+        FeedWidgetData(
+          type: FeedWidgetType.financeSummary,
+          id: 'finance_summary',
+          priority: isEvening ? 0.70 : 0.60,
+          lastUpdated: now,
+          data: _recentMemories
+              .where((m) => m.category == 'finance')
+              .take(5)
+              .toList(),
+        ),
+      );
     }
 
     if (_categoryStats['health'] != null && _categoryStats['health']! > 0) {
-      newWidgets.add(FeedWidgetData(
-        type: FeedWidgetType.healthDashboard,
-        id: 'health_dashboard',
-        priority: 0.60,
-        lastUpdated: now,
-        data: _recentMemories.where((m) => m.category == 'health').take(5).toList(),
-      ));
+      newWidgets.add(
+        FeedWidgetData(
+          type: FeedWidgetType.healthDashboard,
+          id: 'health_dashboard',
+          priority: 0.60,
+          lastUpdated: now,
+          data: _recentMemories
+              .where((m) => m.category == 'health')
+              .take(5)
+              .toList(),
+        ),
+      );
     }
 
-    if (_categoryStats['mindfulness'] != null && _categoryStats['mindfulness']! > 0) {
-      newWidgets.add(FeedWidgetData(
-        type: FeedWidgetType.mindfulnessTracker,
-        id: 'mindfulness_tracker',
-        priority: isMorning ? 0.70 : 0.55,
-        lastUpdated: now,
-        data: _recentMemories.where((m) => m.category == 'mindfulness').take(5).toList(),
-      ));
+    if (_categoryStats['mindfulness'] != null &&
+        _categoryStats['mindfulness']! > 0) {
+      newWidgets.add(
+        FeedWidgetData(
+          type: FeedWidgetType.mindfulnessTracker,
+          id: 'mindfulness_tracker',
+          priority: isMorning ? 0.70 : 0.55,
+          lastUpdated: now,
+          data: _recentMemories
+              .where((m) => m.category == 'mindfulness')
+              .take(5)
+              .toList(),
+        ),
+      );
     }
 
     if (_categoryStats['routine'] != null && _categoryStats['routine']! > 0) {
-      newWidgets.add(FeedWidgetData(
-        type: FeedWidgetType.routineTimeline,
-        id: 'routine_timeline',
-        priority: isMorning ? 0.75 : 0.50,
-        lastUpdated: now,
-        data: _recentMemories.where((m) => m.category == 'routine').take(5).toList(),
-      ));
+      newWidgets.add(
+        FeedWidgetData(
+          type: FeedWidgetType.routineTimeline,
+          id: 'routine_timeline',
+          priority: isMorning ? 0.75 : 0.50,
+          lastUpdated: now,
+          data: _recentMemories
+              .where((m) => m.category == 'routine')
+              .take(5)
+              .toList(),
+        ),
+      );
     }
 
     // Insights/Patterns
     for (final insight in _insights.take(3)) {
-      newWidgets.add(FeedWidgetData(
-        type: FeedWidgetType.patternDetected,
-        id: 'pattern_${insight.id}',
-        priority: insight.isNew ? 0.90 : 0.65,
-        lastUpdated: now,
-        data: insight,
-        isNew: insight.isNew,
-      ));
+      newWidgets.add(
+        FeedWidgetData(
+          type: FeedWidgetType.patternDetected,
+          id: 'pattern_${insight.id}',
+          priority: insight.isNew ? 0.90 : 0.65,
+          lastUpdated: now,
+          data: insight,
+          isNew: insight.isNew,
+        ),
+      );
     }
 
     // Gap warnings from notifications
     final gapNotifications = _notifications
-        .where((n) => n.type == 'alert' || n.title.toLowerCase().contains('gap'))
+        .where(
+          (n) => n.type == 'alert' || n.title.toLowerCase().contains('gap'),
+        )
         .take(2);
     for (final notif in gapNotifications) {
-      newWidgets.add(FeedWidgetData(
-        type: FeedWidgetType.gapWarning,
-        id: 'gap_${notif.id}',
-        priority: 0.85,
-        lastUpdated: now,
-        data: notif,
-      ));
+      newWidgets.add(
+        FeedWidgetData(
+          type: FeedWidgetType.gapWarning,
+          id: 'gap_${notif.id}',
+          priority: 0.85,
+          lastUpdated: now,
+          data: notif,
+        ),
+      );
     }
 
     // Streak milestone
@@ -319,14 +361,16 @@ class FeedProvider extends ChangeNotifier {
       final streak = _engagementSummary!.engagement.currentLoggingStreak;
       // Show if hitting a milestone (7, 14, 30, 60, 90, etc.)
       if (streak == 7 || streak == 14 || streak == 30 || streak % 30 == 0) {
-        newWidgets.add(FeedWidgetData(
-          type: FeedWidgetType.streakMilestone,
-          id: 'streak_milestone',
-          priority: 0.95,
-          lastUpdated: now,
-          data: streak,
-          isNew: true,
-        ));
+        newWidgets.add(
+          FeedWidgetData(
+            type: FeedWidgetType.streakMilestone,
+            id: 'streak_milestone',
+            priority: 0.95,
+            lastUpdated: now,
+            data: streak,
+            isNew: true,
+          ),
+        );
       }
     }
 

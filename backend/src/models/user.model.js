@@ -11,11 +11,11 @@ class UserModel {
     }
 
     /**
-     * Find user by email
+     * Find user by Firebase UID
      */
-    static async findByEmail(email) {
-        const query = 'SELECT * FROM users WHERE email = $1';
-        const result = await db.query(query, [email]);
+    static async findByFirebaseUid(firebaseUid) {
+        const query = 'SELECT * FROM users WHERE firebase_uid = $1';
+        const result = await db.query(query, [firebaseUid]);
         return result.rows[0];
     }
 
@@ -23,15 +23,21 @@ class UserModel {
      * Create new user
      */
     static async create(userData) {
-        const { username, email, subscriptionTier } = userData;
+        const { username, email, subscriptionTier, firebaseUid } = userData;
 
         const query = `
-      INSERT INTO users (username, email, subscription_tier)
-      VALUES ($1, $2, $3)
+      INSERT INTO users (username, email, subscription_tier, firebase_uid)
+      VALUES ($1, $2, $3, $4)
       RETURNING *
     `;
 
-        const values = [username, email, subscriptionTier || 'free'];
+        const values = [
+            username || `user_${Date.now()}`, // Fallback username
+            email,
+            subscriptionTier || 'free',
+            firebaseUid
+        ];
+
         const result = await db.query(query, values);
         return result.rows[0];
     }

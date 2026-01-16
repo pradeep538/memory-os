@@ -14,6 +14,9 @@ import 'detail/engagement_screen.dart';
 import 'detail/patterns_screen.dart';
 import 'detail/achievements_screen.dart';
 import 'input_modal_screen.dart';
+import '../services/engagement_service.dart';
+import '../widgets/engagement_feed.dart';
+import '../widgets/feedback_toast.dart';
 
 /// Main feed screen - 95% of user time spent here
 class FeedScreen extends StatefulWidget {
@@ -25,6 +28,9 @@ class FeedScreen extends StatefulWidget {
 
 class _FeedScreenState extends State<FeedScreen> {
   final _scrollController = ScrollController();
+  final _engagementService = EngagementService();
+  UserFeedback? _latestFeedback;
+  VoidCallback? _inputListener;
 
   @override
   void initState() {
@@ -32,12 +38,42 @@ class _FeedScreenState extends State<FeedScreen> {
     // Load feed on init
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<FeedProvider>().loadFeed();
+      // Listen to input provider for success events
+      _inputListener = _onInputStateChange;
+      context.read<InputProvider>().addListener(_inputListener!);
     });
+  }
+
+  void _onInputStateChange() {
+    final inputProvider = context.read<InputProvider>();
+    if (inputProvider.state == InputState.success) {
+      _pollFeedback();
+    }
+  }
+
+  Future<void> _pollFeedback() async {
+    final feedback = await _engagementService.pollForFeedback();
+    if (feedback != null && mounted) {
+      setState(() {
+        _latestFeedback = feedback;
+      });
+      // Auto-dismiss after 5 seconds
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted && _latestFeedback == feedback) {
+          setState(() {
+            _latestFeedback = null;
+          });
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    if (_inputListener != null) {
+      context.read<InputProvider>().removeListener(_inputListener!);
+    }
     super.dispose();
   }
 
@@ -54,17 +90,20 @@ class _FeedScreenState extends State<FeedScreen> {
                 // App bar
                 _buildAppBar(),
 
+                // Daily Brief (Engagement Feed)
+                EngagementFeed(engagementService: _engagementService),
+
                 // Feed content
                 Expanded(
                   child: Consumer<FeedProvider>(
                     builder: (context, feedProvider, _) {
-                      if (feedProvider.isLoading && feedProvider.widgets.isEmpty) {
-                        return const Center(
-                          child: CircularProgressIndicator(),
-                        );
+                      if (feedProvider.isLoading &&
+                          feedProvider.widgets.isEmpty) {
+                        return const Center(child: CircularProgressIndicator());
                       }
 
-                      if (feedProvider.error != null && feedProvider.widgets.isEmpty) {
+                      if (feedProvider.error != null &&
+                          feedProvider.widgets.isEmpty) {
                         return _buildErrorState(feedProvider.error!);
                       }
 
@@ -102,7 +141,9 @@ class _FeedScreenState extends State<FeedScreen> {
                     right: 0,
                     bottom: AppSpacing.inputBarHeight + AppSpacing.lg,
                     child: SuccessToast(
-                      text: inputProvider.lastMemory!.displayText,
+                      text:
+                          inputProvider.lastFeedbackMessage ??
+                          inputProvider.lastMemory!.displayText,
                       onUndo: () => inputProvider.undoLastMemory(),
                     ),
                   );
@@ -110,6 +151,13 @@ class _FeedScreenState extends State<FeedScreen> {
                 return const SizedBox.shrink();
               },
             ),
+
+            // Engagement Feedback Toast (Stacked on top)
+            if (_latestFeedback != null)
+              FeedbackToast(
+                feedback: _latestFeedback!,
+                onDismiss: () => setState(() => _latestFeedback = null),
+              ),
           ],
         ),
       ),
@@ -126,15 +174,11 @@ class _FeedScreenState extends State<FeedScreen> {
         children: [
           Text(
             'Memory',
-            style: AppTypography.h2.copyWith(
-              color: AppColors.textPrimary,
-            ),
+            style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
           ),
           Text(
             'OS',
-            style: AppTypography.h2.copyWith(
-              color: AppColors.primary,
-            ),
+            style: AppTypography.h2.copyWith(color: AppColors.primary),
           ),
           const Spacer(),
           // Voice quota indicator
@@ -160,13 +204,17 @@ class _FeedScreenState extends State<FeedScreen> {
                     Icon(
                       Icons.mic_rounded,
                       size: 14,
-                      color: quota.hasQuota ? AppColors.primary : AppColors.error,
+                      color: quota.hasQuota
+                          ? AppColors.primary
+                          : AppColors.error,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       '${quota.remaining}',
                       style: AppTypography.labelSmall.copyWith(
-                        color: quota.hasQuota ? AppColors.primary : AppColors.error,
+                        color: quota.hasQuota
+                            ? AppColors.primary
+                            : AppColors.error,
                       ),
                     ),
                   ],
@@ -188,9 +236,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.screenPadding,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
       itemCount: widgets.length + 1, // +1 for bottom padding
       itemBuilder: (context, index) {
         if (index == widgets.length) {
@@ -265,7 +311,8 @@ class _FeedScreenState extends State<FeedScreen> {
         return PatternDetectedWidget(
           insight: widgetData.data as Insight,
           onTap: () => _navigateToPatterns(),
-          onCreateHabit: () => _createHabitFromInsight(widgetData.data as Insight),
+          onCreateHabit: () =>
+              _createHabitFromInsight(widgetData.data as Insight),
         );
 
       case FeedWidgetType.gapWarning:
@@ -375,10 +422,7 @@ class _FeedScreenState extends State<FeedScreen> {
         borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
         border: Border.all(color: AppColors.border),
       ),
-      child: Text(
-        text,
-        style: AppTypography.bodySmall,
-      ),
+      child: Text(text, style: AppTypography.bodySmall),
     );
   }
 
@@ -393,10 +437,7 @@ class _FeedScreenState extends State<FeedScreen> {
             color: AppColors.textTertiary,
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            'Unable to load',
-            style: AppTypography.h4,
-          ),
+          Text('Unable to load', style: AppTypography.h4),
           const SizedBox(height: AppSpacing.xs),
           Text(
             error,

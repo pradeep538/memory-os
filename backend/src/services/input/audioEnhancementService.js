@@ -40,48 +40,116 @@ class AudioEnhancementService {
      * @param {number} duration - Duration in seconds
      */
     async enhanceFromAudio(audioBuffer, mimeType, duration) {
+        console.log(`Processing audio: ${mimeType}, Size: ${(audioBuffer.length / 1024).toFixed(2)} KB, Duration: ${duration}s`);
         let tempPath = null;
 
         try {
-            // Step 1: Save buffer to temp file
-            const filename = `audio_${Date.now()}.${this.getExtension(mimeType)}`;
-            tempPath = path.join(this.tempDir, filename);
-            fs.writeFileSync(tempPath, audioBuffer);
+            // Step 1: Check if file is small enough for inline data (Limit is 20MB, we use 10MB for safety)
+            const MAX_INLINE_SIZE = 10 * 1024 * 1024; // 10MB
+            const isSmallFile = audioBuffer.length < MAX_INLINE_SIZE;
 
-            // Step 2: Upload to Gemini Files API
-            console.log('Uploading audio to Gemini Files API...');
-            const audioFile = await this.ai.files.upload({
-                file: tempPath,
-                mimeType: mimeType,
-                displayName: `voice_input_${Date.now()}`
-            });
+            let response = null;
 
-            console.log('Audio uploaded:', audioFile.uri);
+            if (isSmallFile) {
+                console.log('File is small (<10MB), using inline processing...');
+                const base64Audio = audioBuffer.toString('base64');
 
-            // Step 3: Wait for file to be processed
-            await this.waitForFileProcessing(audioFile.name);
-
-            // Step 4: Process with Gemini
-            const prompt = this.buildAudioEnhancementPrompt();
-
-            console.log('Processing audio with Gemini...');
-            const response = await this.ai.models.generateContent({
-                model: config.gemini.model || 'gemini-2.0-flash-lite',
-                contents: [
-                    {
-                        role: 'user',
-                        parts: [
-                            { text: prompt },
+                try {
+                    const prompt = this.buildAudioEnhancementPrompt();
+                    response = await this.ai.models.generateContent({
+                        model: config.gemini.model || 'gemini-2.0-flash-lite',
+                        contents: [
                             {
-                                fileData: {
-                                    mimeType: audioFile.mimeType,
-                                    fileUri: audioFile.uri
-                                }
+                                role: 'user',
+                                parts: [
+                                    { text: prompt },
+                                    {
+                                        inlineData: {
+                                            mimeType: mimeType,
+                                            data: base64Audio
+                                        }
+                                    }
+                                ]
                             }
                         ]
+                    });
+                } catch (err) {
+                    console.error('Inline processing error:', err);
+                    throw err;
+                }
+
+            } else {
+                // Large file path: Upload to Files API
+                console.log('File is large (>10MB), using Files API...');
+
+                // Step 1: Save buffer to temp file
+                const filename = `audio_${Date.now()}.${this.getExtension(mimeType)}`;
+                tempPath = path.join(this.tempDir, filename);
+                fs.writeFileSync(tempPath, audioBuffer);
+
+                // Step 2: Upload to Gemini Files API
+                console.log('Uploading audio to Gemini Files API...');
+                const audioFile = await this.ai.files.upload({
+                    file: tempPath,
+                    mimeType: mimeType,
+                    displayName: `voice_input_${Date.now()}`
+                });
+
+                console.log('Audio uploaded:', audioFile.uri);
+
+                // Step 3: Wait briefly for file to be available
+                console.log('Waiting for file processing...');
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Step 4: Process with Gemini
+                const prompt = this.buildAudioEnhancementPrompt();
+
+                let attempts = 0;
+                const maxAttempts = 15;
+
+                while (attempts < maxAttempts) {
+                    try {
+                        response = await this.ai.models.generateContent({
+                            model: config.gemini.model || 'gemini-2.0-flash-lite',
+                            contents: [
+                                {
+                                    role: 'user',
+                                    parts: [
+                                        { text: prompt },
+                                        {
+                                            fileData: {
+                                                mimeType: audioFile.mimeType,
+                                                fileUri: audioFile.uri
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        });
+                        break; // Success
+                    } catch (err) {
+                        if (err.message && (err.message.includes('not in an ACTIVE state') || err.message.includes('FAILED_PRECONDITION'))) {
+                            attempts++;
+                            console.log(`File not ready (Attempt ${attempts}/${maxAttempts}). Waiting...`);
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                        } else {
+                            throw err; // Other error
+                        }
                     }
-                ]
-            });
+                }
+
+                if (!response) {
+                    throw new Error('Timeout waiting for file to be active');
+                }
+
+                // Cleanup uploaded file
+                try {
+                    await this.ai.files.delete({ name: audioFile.name });
+                    console.log('Cleaned up uploaded file');
+                } catch (cleanupError) {
+                    console.warn('Failed to delete uploaded file:', cleanupError.message);
+                }
+            }
 
             console.log('Gemini response received');
 
@@ -90,14 +158,7 @@ class AudioEnhancementService {
 
             // Step 6: Calculate confidence
             result.confidence = this.calculateConfidence(result, duration);
-
-            // Step 7: Cleanup
-            try {
-                await this.ai.files.delete(audioFile.name);
-                console.log('Cleaned up uploaded file');
-            } catch (cleanupError) {
-                console.warn('Failed to delete uploaded file:', cleanupError.message);
-            }
+            console.log(`Confidence calculated: ${result.confidence}`);
 
             return {
                 success: true,
@@ -126,23 +187,12 @@ class AudioEnhancementService {
     /**
      * Wait for Gemini to process uploaded file
      */
+    /**
+     * Wait for Gemini to process uploaded file (Deprecated: causing SDK issues)
+     */
     async waitForFileProcessing(fileName, maxAttempts = 10) {
-        for (let i = 0; i < maxAttempts; i++) {
-            const file = await this.ai.files.get(fileName);
-
-            if (file.state === 'ACTIVE') {
-                return file;
-            }
-
-            if (file.state === 'FAILED') {
-                throw new Error('File processing failed');
-            }
-
-            // Wait 1 second before next attempt
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-
-        throw new Error('File processing timeout');
+        // Skipping explicit check due to SDK bug
+        return true;
     }
 
     /**
@@ -172,6 +222,7 @@ Respond ONLY with valid JSON in this exact format:
   },
   "semantic_confidence": 0.0 to 1.0,
   "audio_quality": "excellent|good|fair|poor",
+  "confirmation_message": "Short, crisp first-person confirmation (e.g. 'Logged your run', 'Saved $45 expense')",
   "reasoning": "brief explanation"
 }
 
@@ -235,6 +286,7 @@ Now process the audio and respond ONLY with JSON.`;
                 detected_entities: parsed.detected_entities || {},
                 semantic_confidence: parsed.semantic_confidence || 0.5,
                 audio_quality: parsed.audio_quality || 'unknown',
+                confirmation_message: parsed.confirmation_message || parsed.enhanced_text || 'Logged',
                 reasoning: parsed.reasoning || ''
             };
         } catch (error) {

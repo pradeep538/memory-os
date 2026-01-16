@@ -8,10 +8,119 @@ class HabitService {
      * Create a new habit
      */
     async createHabit(userId, habitData) {
-        // Validate habit data
-        this.validateHabitData(habitData);
+        // Normalize keys (support snake_case from API)
+        const normalizedData = {
+            habitName: habitData.habitName || habitData.habit_name,
+            habitType: habitData.habitType || habitData.habit_type,
+            category: habitData.category,
+            description: habitData.description,
+            targetFrequency: habitData.targetFrequency || habitData.target_frequency,
+            targetFrequencyUnit: (habitData.targetFrequencyUnit || habitData.target_frequency_unit || 'weekly')
+                .replace(/^day$/, 'daily')
+                .replace(/^week$/, 'weekly')
+                .replace(/^month$/, 'monthly'),
+            baselineFrequency: habitData.baselineFrequency || habitData.baseline_frequency,
+            targetMaxFrequency: habitData.targetMaxFrequency || habitData.target_max_frequency,
+            reminderEnabled: habitData.reminderEnabled ?? habitData.reminder_enabled ?? true,
+            reminderTime: habitData.reminderTime || habitData.reminder_time,
+            reminderDays: habitData.reminderDays || habitData.reminder_days,
+            targetCompletionDate: habitData.targetCompletionDate || habitData.target_completion_date
+        };
 
-        return await HabitModel.create(userId, habitData);
+        // Validate habit data
+        this.validateHabitData(normalizedData);
+
+        return await HabitModel.create(userId, normalizedData);
+    }
+
+    /**
+     * Check if input text indicates completion of an existing habit
+     */
+    async checkCompletionIntent(userId, text) {
+        try {
+            // 1. Get active habits
+            const habits = await this.getUserHabits(userId, 'active');
+            if (habits.length === 0) return null;
+
+            const habitNames = habits.map(h => h.habit_name);
+
+            // 2. Simple fuzzy match first (optimization)
+            const lowerText = text.toLowerCase();
+            const directMatch = habits.find(h => lowerText.includes(h.habit_name.toLowerCase()));
+            if (directMatch) return directMatch;
+
+            // 3. LLM Match for complex cases
+            const llmService = (await import('../understanding/llmService.js')).default;
+
+            const prompt = `
+User Input: "${text}"
+Active Habits: ${JSON.stringify(habitNames)}
+
+Does the user input likely indicate they completed one of the active habits?
+Return ONLY the exact habit name from the list, or "null" if no match.
+`;
+
+            const response = await llmService.generateStructuredResponse(prompt);
+            const matchedName = response.trim().replace(/"/g, '');
+
+            if (matchedName && matchedName !== 'null' && habitNames.includes(matchedName)) {
+                return habits.find(h => h.habit_name === matchedName);
+            }
+
+            return null;
+        } catch (error) {
+            console.error('Check completion intent error:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Check if input text indicates intent to CREATE a new habit
+     * Returns habit data if detected, or null
+     */
+    async checkCreationIntent(userId, text) {
+        try {
+            const llmService = (await import('../understanding/llmService.js')).default;
+
+            const prompt = `
+User Input: "${text}"
+
+Does this input indicate a desire to START, CREATE, or STOP a habit?
+(e.g., "I want to start running", "I need to quit smoking", "Add a habit to drink water")
+
+If YES, extract details and return JSON:
+{
+  "detected": true,
+  "habit_name": "Short, clear name (e.g., Running, No Sugar)",
+  "habit_type": "build" (for good habits) or "quit" (for bad habits),
+  "frequency": 1,
+  "unit": "day" (default) or "week"
+}
+
+If NO (or if it's just a log/memory), return:
+{"detected": false}
+
+Respond ONLY with valid JSON.
+`;
+
+            const response = await llmService.generateStructuredResponse(prompt);
+            const parsed = JSON.parse(response.replace(/```json|```/g, '').trim());
+
+            if (parsed.detected && parsed.habit_name) {
+                return {
+                    habitName: parsed.habit_name,
+                    habitType: parsed.habit_type || 'build',
+                    category: 'routine', // Default, logic could be improved to infer category
+                    targetFrequency: parsed.frequency || 1,
+                    targetFrequencyUnit: parsed.unit || 'day'
+                };
+            }
+
+            return null;
+        } catch (error) {
+            console.error('Check creation intent error:', error);
+            return null;
+        }
     }
 
     /**
@@ -32,7 +141,16 @@ class HabitService {
      * Update habit
      */
     async updateHabit(habitId, updates) {
-        return await HabitModel.update(habitId, updates);
+        const habit = await HabitModel.update(habitId, updates);
+
+        // If frequency changed, recalculate streak
+        if (updates.target_frequency || updates.target_frequency_unit) {
+            await HabitModel.updateStreak(habitId);
+            // Re-fetch to get updated streak in response
+            return await HabitModel.findById(habitId);
+        }
+
+        return habit;
     }
 
     /**

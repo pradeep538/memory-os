@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// Memory OS Typography System
+/// Kairo Typography System
 /// Clean, readable typography for voice-first UI
 class AppTypography {
   AppTypography._();

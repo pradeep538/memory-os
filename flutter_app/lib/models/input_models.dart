@@ -9,6 +9,7 @@ class InputResult {
   final String? reasoning;
   final List<String>? suggestions;
   final Memory? memory;
+  final String? shortResponse;
 
   InputResult({
     required this.needsConfirmation,
@@ -20,23 +21,30 @@ class InputResult {
     this.reasoning,
     this.suggestions,
     this.memory,
+    this.shortResponse,
   });
 
   factory InputResult.fromJson(Map<String, dynamic> json) {
     return InputResult(
-      needsConfirmation: json['needs_confirmation'] ?? json['needsConfirmation'] ?? false,
+      needsConfirmation:
+          json['needs_confirmation'] ?? json['needsConfirmation'] ?? false,
       rawInput: json['raw_input'] ?? json['rawInput'],
       enhancedText: json['enhanced_text'] ?? json['enhancedText'] ?? '',
-      detectedCategory: json['detected_category'] ?? json['detectedCategory'] ?? 'generic',
+      detectedCategory:
+          json['detected_category'] ?? json['detectedCategory'] ?? 'generic',
       detectedEntities: Map<String, dynamic>.from(
         json['detected_entities'] ?? json['detectedEntities'] ?? {},
       ),
-      confidenceScore: (json['confidence_score'] ?? json['confidenceScore'] ?? 0.0).toDouble(),
+      confidenceScore:
+          (json['confidence_score'] ?? json['confidenceScore'] ?? 0.0)
+              .toDouble(),
       reasoning: json['reasoning'],
       suggestions: json['suggestions'] != null
           ? List<String>.from(json['suggestions'])
           : null,
       memory: json['memory'] != null ? Memory.fromJson(json['memory']) : null,
+      shortResponse:
+          json['confirmation_message'] ?? json['confirmationMessage'],
     );
   }
 }
@@ -47,11 +55,7 @@ class ConfirmResult {
   final Memory? memory;
   final String? message;
 
-  ConfirmResult({
-    required this.success,
-    this.memory,
-    this.message,
-  });
+  ConfirmResult({required this.success, this.memory, this.message});
 
   factory ConfirmResult.fromJson(Map<String, dynamic> json) {
     return ConfirmResult(
@@ -73,6 +77,7 @@ class AudioInputResult {
   final String? audioQuality;
   final VoiceQuota? quota;
   final Memory? memory;
+  final String? shortResponse;
 
   AudioInputResult({
     required this.transcription,
@@ -84,21 +89,28 @@ class AudioInputResult {
     this.audioQuality,
     this.quota,
     this.memory,
+    this.shortResponse,
   });
 
   factory AudioInputResult.fromJson(Map<String, dynamic> json) {
     return AudioInputResult(
       transcription: json['transcription'] ?? '',
       enhancedText: json['enhanced_text'] ?? json['enhancedText'] ?? '',
-      detectedCategory: json['detected_category'] ?? json['detectedCategory'] ?? 'generic',
+      detectedCategory:
+          json['detected_category'] ?? json['detectedCategory'] ?? 'generic',
       detectedEntities: Map<String, dynamic>.from(
         json['detected_entities'] ?? json['detectedEntities'] ?? {},
       ),
-      confidenceScore: (json['confidence_score'] ?? json['confidenceScore'] ?? 0.0).toDouble(),
-      needsConfirmation: json['needs_confirmation'] ?? json['needsConfirmation'] ?? false,
+      confidenceScore:
+          (json['confidence_score'] ?? json['confidenceScore'] ?? 0.0)
+              .toDouble(),
+      needsConfirmation:
+          json['needs_confirmation'] ?? json['needsConfirmation'] ?? false,
       audioQuality: json['audio_quality'] ?? json['audioQuality'],
       quota: json['quota'] != null ? VoiceQuota.fromJson(json['quota']) : null,
       memory: json['memory'] != null ? Memory.fromJson(json['memory']) : null,
+      shortResponse:
+          json['confirmation_message'] ?? json['confirmationMessage'],
     );
   }
 }
@@ -174,7 +186,9 @@ class Memory {
       normalizedData: Map<String, dynamic>.from(
         json['normalized_data'] ?? json['normalizedData'] ?? {},
       ),
-      confidenceScore: (json['confidence_score'] ?? json['confidenceScore'] ?? 0.0).toDouble(),
+      confidenceScore:
+          (json['confidence_score'] ?? json['confidenceScore'] ?? 0.0)
+              .toDouble(),
       status: json['status'] ?? 'validated',
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
@@ -194,7 +208,8 @@ class Memory {
   String get originalText => rawInput;
 
   /// Alias for normalizedData for convenience
-  Map<String, dynamic>? get metadata => normalizedData.isNotEmpty ? normalizedData : null;
+  Map<String, dynamic>? get metadata =>
+      normalizedData.isNotEmpty ? normalizedData : null;
 
   /// Get human-readable time ago string
   String get timeAgo {
@@ -214,5 +229,29 @@ class Memory {
     } else {
       return '${(diff.inDays / 30).floor()}mo ago';
     }
+  }
+}
+
+/// Result of async audio upload
+class AsyncUploadResult {
+  final bool autoProcessed;
+  final String message;
+  final String memoryId;
+  final VoiceQuota? quota;
+
+  AsyncUploadResult({
+    required this.autoProcessed,
+    required this.message,
+    required this.memoryId,
+    this.quota,
+  });
+
+  factory AsyncUploadResult.fromJson(Map<String, dynamic> json) {
+    return AsyncUploadResult(
+      autoProcessed: json['auto_processed'] ?? false,
+      message: json['message'] ?? '',
+      memoryId: json['memory_id'] ?? '',
+      quota: json['quota'] != null ? VoiceQuota.fromJson(json['quota']) : null,
+    );
   }
 }

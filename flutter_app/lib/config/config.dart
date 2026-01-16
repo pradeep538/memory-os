@@ -1,7 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// Memory OS Configuration
+/// Kairo Configuration
 class Config {
   Config._();
 
@@ -9,14 +10,19 @@ class Config {
   // API CONFIGURATION
   // ============================================================================
 
-  static const String apiBaseUrl = 'http://localhost:3000/api/v1';
+  static String get apiBaseUrl {
+    if (Platform.isAndroid) {
+      return 'http://localhost:3000/api/v1';
+    }
+    return 'http://localhost:3000/api/v1';
+  }
 
   // For emulator/device testing:
   // Android Emulator: 'http://10.0.2.2:3000/api/v1'
   // iOS Simulator: 'http://localhost:3000/api/v1'
   // Real device: 'http://<your-ip>:3000/api/v1'
 
-  static const Duration apiTimeout = Duration(seconds: 30);
+  static const Duration apiTimeout = Duration(seconds: 60);
 
   // ============================================================================
   // CONFIDENCE THRESHOLDS
@@ -62,19 +68,14 @@ class Config {
   // CACHE DURATIONS
   // ============================================================================
 
+  static const Duration connectTimeout = Duration(seconds: 30);
+  static const Duration receiveTimeout = Duration(seconds: 30);
   static const Duration insightsCacheDuration = Duration(hours: 24);
   static const Duration engagementCacheDuration = Duration(minutes: 5);
 }
 
 /// App Categories (matching backend)
-enum AppCategory {
-  fitness,
-  finance,
-  health,
-  mindfulness,
-  routine,
-  generic,
-}
+enum AppCategory { fitness, finance, health, mindfulness, routine, generic }
 
 extension AppCategoryExtension on AppCategory {
   String get displayName {

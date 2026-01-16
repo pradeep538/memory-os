@@ -25,16 +25,16 @@ class PatternDetectionService:
                 DATE(created_at) as date,
                 COUNT(*) as count
             FROM memory_units
-            WHERE user_id = %s
+            WHERE user_id = %(user_id)s
                 AND status = 'validated'
                 AND created_at >= NOW() - INTERVAL '30 days'
         """
         
-        params = [user_id]
+        params = {"user_id": user_id}
         
         if category:
-            query += " AND category = %s"
-            params.append(category)
+            query += " AND category = %(category)s"
+            params["category"] = category
         
         query += " GROUP BY activity, category, DATE(created_at)"
         
@@ -92,14 +92,14 @@ class PatternDetectionService:
                 EXTRACT(HOUR FROM created_at) as hour,
                 COUNT(*) as count
             FROM memory_units
-            WHERE user_id = %s
+            WHERE user_id = %(user_id)s
                 AND status = 'validated'
                 AND created_at >= NOW() - INTERVAL '30 days'
             GROUP BY activity, category, hour
             HAVING COUNT(*) >= 3
         """
         
-        df = pd.read_sql(query, self.db.bind, params=[user_id])
+        df = pd.read_sql(query, self.db.bind, params={"user_id": user_id})
         
         if df.empty:
             return []

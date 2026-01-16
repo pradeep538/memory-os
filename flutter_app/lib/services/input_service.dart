@@ -35,13 +35,13 @@ class InputService {
     );
   }
 
-  /// Process audio input
-  Future<ApiResponse<AudioInputResult>> processAudio(File audioFile) async {
-    return _client.postMultipart<AudioInputResult>(
+  /// Process audio input (Async)
+  Future<ApiResponse<AsyncUploadResult>> processAudio(File audioFile) async {
+    return _client.postMultipart<AsyncUploadResult>(
       '/input/audio',
       file: audioFile,
       fileField: 'audio',
-      fromJson: (json) => AudioInputResult.fromJson(json),
+      fromJson: (json) => AsyncUploadResult.fromJson(json),
     );
   }
 

@@ -87,6 +87,7 @@ Respond ONLY with valid JSON in this exact format:
     "category_specific": {}
   },
   "semantic_confidence": 0.0 to 1.0,
+  "confirmation_message": "Short, crisp first-person confirmation",
   "reasoning": "Brief explanation of interpretation"
 }
 
@@ -151,6 +152,7 @@ Now process the user input and respond ONLY with JSON.`;
                 detected_category: parsed.detected_category || 'generic',
                 detected_entities: parsed.detected_entities || {},
                 semantic_confidence: parsed.semantic_confidence || 0.5,
+                confirmation_message: parsed.confirmation_message || parsed.enhanced_text || 'Logged',
                 reasoning: parsed.reasoning || ''
             };
         } catch (error) {

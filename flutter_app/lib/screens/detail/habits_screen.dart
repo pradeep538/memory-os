@@ -54,10 +54,9 @@ class _HabitsScreenState extends State<HabitsScreen>
       _error = null;
     });
 
-    final response = await context
-        .read<AppProvider>()
-        .habitsService
-        .getHabits(status: _filter);
+    final response = await context.read<AppProvider>().habitsService.getHabits(
+      status: _filter,
+    );
 
     if (mounted) {
       setState(() {
@@ -111,10 +110,10 @@ class _HabitsScreenState extends State<HabitsScreen>
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? _buildErrorState()
-              : _habits.isEmpty
-                  ? _buildEmptyState()
-                  : _buildHabitsList(),
+          ? _buildErrorState()
+          : _habits.isEmpty
+          ? _buildEmptyState()
+          : _buildHabitsList(),
     );
   }
 
@@ -144,16 +143,9 @@ class _HabitsScreenState extends State<HabitsScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.task_alt_rounded,
-            size: 64,
-            color: AppColors.textTertiary,
-          ),
+          Icon(Icons.task_alt_rounded, size: 64, color: AppColors.textTertiary),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            'No ${_filter} habits',
-            style: AppTypography.h4,
-          ),
+          Text('No $_filter habits', style: AppTypography.h4),
           const SizedBox(height: AppSpacing.sm),
           Text(
             _filter == 'active'
@@ -191,9 +183,7 @@ class _HabitsScreenState extends State<HabitsScreen>
 
   void _showHabitDetail(Habit habit) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => HabitDetailScreen(habit: habit),
-      ),
+      MaterialPageRoute(builder: (context) => HabitDetailScreen(habit: habit)),
     );
   }
 
@@ -202,8 +192,17 @@ class _HabitsScreenState extends State<HabitsScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => const _CreateHabitSheet(),
-    ).then((_) => _loadHabits());
+      builder: (context) => const _HabitFormSheet(),
+    ).then((result) {
+      if (result == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Habit created successfully 🎉')),
+          );
+        }
+      }
+      _loadHabits();
+    });
   }
 }
 
@@ -212,11 +211,7 @@ class _HabitCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onComplete;
 
-  const _HabitCard({
-    required this.habit,
-    this.onTap,
-    this.onComplete,
-  });
+  const _HabitCard({required this.habit, this.onTap, this.onComplete});
 
   @override
   Widget build(BuildContext context) {
@@ -280,15 +275,9 @@ class _HabitCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      habit.habitName,
-                      style: AppTypography.h4,
-                    ),
+                    Text(habit.habitName, style: AppTypography.h4),
                     const SizedBox(height: AppSpacing.xxs),
-                    Text(
-                      habit.frequencyText,
-                      style: AppTypography.caption,
-                    ),
+                    Text(habit.frequencyText, style: AppTypography.caption),
                   ],
                 ),
               ),
@@ -401,7 +390,25 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
           IconButton(
             icon: const Icon(Icons.edit_rounded),
             onPressed: () {
-              // TODO: Edit habit
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (context) => _HabitFormSheet(habit: habit),
+              ).then((result) {
+                if (result == true) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Habit updated successfully ✅'),
+                      ),
+                    );
+                  }
+                }
+                // Reload progress/habit details if needed
+                _loadProgress();
+                setState(() {});
+              });
             },
           ),
           IconButton(
@@ -425,7 +432,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                       Expanded(
                         child: _StatCard(
                           title: 'Current Streak',
-                          value: '${_progress?.currentStreak ?? habit.currentStreak}',
+                          value:
+                              '${_progress?.currentStreak ?? habit.currentStreak}',
                           icon: '🔥',
                           color: AppColors.warning,
                         ),
@@ -434,7 +442,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                       Expanded(
                         child: _StatCard(
                           title: 'Longest Streak',
-                          value: '${_progress?.longestStreak ?? habit.longestStreak}',
+                          value:
+                              '${_progress?.longestStreak ?? habit.longestStreak}',
                           icon: '🏆',
                           color: AppColors.success,
                         ),
@@ -447,7 +456,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                       Expanded(
                         child: _StatCard(
                           title: 'Completion Rate',
-                          value: '${(_progress?.completionRate ?? habit.completionRate).toStringAsFixed(0)}%',
+                          value:
+                              '${(_progress?.completionRate ?? habit.completionRate).toStringAsFixed(0)}%',
                           icon: '📊',
                           color: categoryColor,
                         ),
@@ -482,10 +492,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                               color: categoryColor,
                             ),
                           ),
-                          Text(
-                            'Complete',
-                            style: AppTypography.caption,
-                          ),
+                          Text('Complete', style: AppTypography.caption),
                         ],
                       ),
                     ),
@@ -516,7 +523,10 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                               style: AppTypography.body,
                             ),
                             subtitle: item.notes != null
-                                ? Text(item.notes!, style: AppTypography.caption)
+                                ? Text(
+                                    item.notes!,
+                                    style: AppTypography.caption,
+                                  )
                                 : null,
                           );
                         }).toList(),
@@ -574,39 +584,65 @@ class _StatCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(
-            value,
-            style: AppTypography.numberMedium.copyWith(color: color),
-          ),
+          Text(value, style: AppTypography.numberMedium.copyWith(color: color)),
           const SizedBox(height: AppSpacing.xxs),
-          Text(
-            title,
-            style: AppTypography.caption,
-          ),
+          Text(title, style: AppTypography.caption),
         ],
       ),
     );
   }
 }
 
-/// Create Habit Bottom Sheet
-class _CreateHabitSheet extends StatefulWidget {
-  const _CreateHabitSheet();
+/// Create/Edit Habit Bottom Sheet
+class _HabitFormSheet extends StatefulWidget {
+  final Habit? habit;
+
+  const _HabitFormSheet({this.habit});
 
   @override
-  State<_CreateHabitSheet> createState() => _CreateHabitSheetState();
+  State<_HabitFormSheet> createState() => _HabitFormSheetState();
 }
 
-class _CreateHabitSheetState extends State<_CreateHabitSheet> {
-  final _nameController = TextEditingController();
-  String _selectedCategory = 'routine';
-  String _habitType = 'build';
-  int _frequency = 1;
-  String _frequencyUnit = 'day';
+class _HabitFormSheetState extends State<_HabitFormSheet> {
+  late TextEditingController _nameController;
+  late String _selectedCategory;
+  late String _habitType;
+  late int _frequency;
+  late String _frequencyUnit;
+  late bool _isActive;
   bool _isLoading = false;
 
-  final _categories = ['fitness', 'finance', 'health', 'mindfulness', 'routine'];
+  final _categories = [
+    'fitness',
+    'finance',
+    'health',
+    'mindfulness',
+    'routine',
+  ];
   final _frequencyUnits = ['day', 'week', 'month'];
+
+  @override
+  void initState() {
+    super.initState();
+    final h = widget.habit;
+    _nameController = TextEditingController(text: h?.habitName ?? '');
+    _selectedCategory = h?.category ?? 'routine';
+    _habitType = h?.habitType ?? 'build';
+    _frequency = h?.targetFrequency ?? 1;
+    _isActive = (h?.status ?? 'active') == 'active';
+    // Map backend units (daily/weekly/monthly) to frontend units (day/week/month) if needed,
+    // or assume they match now. Let's normalize:
+    _frequencyUnit = (h?.targetFrequencyUnit ?? 'day')
+        .replaceFirst('ly', '') // daily->dai (oops), daily->day
+        .replaceAll('dai', 'day') // fix daily -> day
+        .replaceAll('ily', 'y'); // daily -> day (simpler approach below)
+
+    // Better normalization:
+    if (_frequencyUnit.endsWith('ly')) {
+      _frequencyUnit = _frequencyUnit.substring(0, _frequencyUnit.length - 2);
+      if (_frequencyUnit == 'dai') _frequencyUnit = 'day';
+    }
+  }
 
   @override
   void dispose() {
@@ -614,23 +650,36 @@ class _CreateHabitSheetState extends State<_CreateHabitSheet> {
     super.dispose();
   }
 
-  Future<void> _createHabit() async {
+  Future<void> _submit() async {
     if (_nameController.text.trim().isEmpty) return;
 
     setState(() => _isLoading = true);
 
-    final response = await context.read<AppProvider>().habitsService.createHabit(
-          habitName: _nameController.text.trim(),
-          habitType: _habitType,
-          category: _selectedCategory,
-          targetFrequency: _frequency,
-          targetFrequencyUnit: _frequencyUnit,
-        );
+    final service = context.read<AppProvider>().habitsService;
+    final name = _nameController.text.trim();
+
+    // Check if creating or editing
+    final response = widget.habit == null
+        ? await service.createHabit(
+            habitName: name,
+            habitType: _habitType,
+            category: _selectedCategory,
+            targetFrequency: _frequency,
+            targetFrequencyUnit: _frequencyUnit,
+          )
+        : await service.updateHabit(
+            widget.habit!.id,
+            habitName: name,
+            status: _isActive ? 'active' : 'paused',
+            targetFrequency: _frequency,
+            targetFrequencyUnit: _frequencyUnit,
+            // We aren't implementing all fields in this simple form yet
+          );
 
     setState(() => _isLoading = false);
 
     if (response.success && mounted) {
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     }
   }
 
@@ -639,7 +688,9 @@ class _CreateHabitSheetState extends State<_CreateHabitSheet> {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusXl)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppSpacing.radiusXl),
+        ),
       ),
       padding: EdgeInsets.only(
         left: AppSpacing.lg,
@@ -665,7 +716,10 @@ class _CreateHabitSheetState extends State<_CreateHabitSheet> {
             ),
             const SizedBox(height: AppSpacing.lg),
 
-            Text('Create Habit', style: AppTypography.h3),
+            Text(
+              widget.habit == null ? 'Create Habit' : 'Edit Habit',
+              style: AppTypography.h3,
+            ),
             const SizedBox(height: AppSpacing.lg),
 
             // Name input
@@ -761,18 +815,38 @@ class _CreateHabitSheetState extends State<_CreateHabitSheet> {
             ),
             const SizedBox(height: AppSpacing.xl),
 
+            // Active/Paused Toggle
+            SwitchListTile(
+              title: const Text('Active Habit'),
+              subtitle: Text(
+                _isActive
+                    ? 'Habit will appear in your feed'
+                    : 'Habit is paused',
+              ),
+              value: _isActive,
+              onChanged: (bool value) {
+                setState(() {
+                  _isActive = value;
+                });
+              },
+              contentPadding: EdgeInsets.zero,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+
             // Create button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _isLoading ? null : _createHabit,
+                onPressed: _isLoading ? null : _submit,
                 child: _isLoading
                     ? const SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Create Habit'),
+                    : Text(
+                        widget.habit == null ? 'Create Habit' : 'Save Changes',
+                      ),
               ),
             ),
           ],
@@ -807,7 +881,9 @@ class _SelectableChip extends StatelessWidget {
           vertical: AppSpacing.sm,
         ),
         decoration: BoxDecoration(
-          color: isSelected ? effectiveColor.withAlpha(25) : AppColors.inputFill,
+          color: isSelected
+              ? effectiveColor.withAlpha(25)
+              : AppColors.inputFill,
           borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
           border: Border.all(
             color: isSelected ? effectiveColor : AppColors.border,

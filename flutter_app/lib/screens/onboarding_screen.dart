@@ -148,7 +148,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   onPressed: _nextPage,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _pages[_currentPage].color,
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.md,
+                    ),
                   ),
                   child: Text(
                     _currentPage == _pages.length - 1 ? 'Get Started' : 'Next',
@@ -199,11 +201,7 @@ class _OnboardingPageWidget extends StatelessWidget {
                     color: page.color.withAlpha(51),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    page.icon,
-                    size: 56,
-                    color: page.color,
-                  ),
+                  child: Icon(page.icon, size: 56, color: page.color),
                 ),
               ),
             ),
@@ -291,11 +289,7 @@ class _OnboardingPageWidget extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.check_circle_rounded,
-                size: 18,
-                color: page.color,
-              ),
+              Icon(Icons.check_circle_rounded, size: 18, color: page.color),
               const SizedBox(width: AppSpacing.sm),
               Text(
                 highlight,
@@ -401,10 +395,7 @@ class _WelcomeAnimationState extends State<WelcomeAnimation>
                   opacity: _opacityAnimation,
                   child: Column(
                     children: [
-                      Text(
-                        'Welcome to Memory OS',
-                        style: AppTypography.h2,
-                      ),
+                      Text('Welcome to Kairo', style: AppTypography.h2),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
                         'Your personal life tracker',

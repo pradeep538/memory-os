@@ -80,6 +80,24 @@ async function insightsRoutes(fastify, options) {
             }
         }
     }, insightsController.refreshInsights.bind(insightsController));
+
+    // Get patterns
+    fastify.get('/patterns', {
+        schema: {
+            description: 'Get detected patterns for user',
+            tags: ['insights'],
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array' },
+                        count: { type: 'integer' }
+                    }
+                }
+            }
+        }
+    }, insightsController.getPatterns.bind(insightsController));
 }
 
 export default insightsRoutes;

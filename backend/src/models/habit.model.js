@@ -174,76 +174,153 @@ class HabitModel {
     /**
      * Calculate and update streak
      */
+    /**
+     * Calculate and update streak
+     */
     static async updateStreak(habitId) {
-        // Get recent completions
-        const completions = await this.getCompletions(habitId, 90);
+        // 1. Get habit details for frequency targets
+        const habit = await this.findById(habitId);
+        if (!habit) return;
 
+        const unit = habit.target_frequency_unit || 'day';
+        const target = habit.target_frequency || 1;
+
+        // 2. Get recent completions
+        const completions = await this.getCompletions(habitId, 365); // Look back further
         if (completions.length === 0) {
+            await this.updateStreakValue(habitId, 0, habit.longest_streak);
             return;
         }
 
-        // Calculate current streak
         let currentStreak = 0;
-        const today = new Date().toISOString().split('T')[0];
 
-        // Sort by date descending
-        completions.sort((a, b) =>
-            new Date(b.completion_date) - new Date(a.completion_date)
-        );
+        // Helper to get time key (YYYY-MM-DD or YYYY-Wxx or YYYY-MM)
+        const getTimeKey = (dateStr) => {
+            const d = new Date(dateStr);
+            if (unit === 'day') return dateStr; // YYYY-MM-DD
+            if (unit === 'month') return `${d.getFullYear()}-${d.getMonth() + 1}`;
 
-        // Check if today/yesterday has completion
-        const latestDate = completions[0].completion_date.toISOString().split('T')[0];
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
+            // Weekly (ISO Week)
+            const date = new Date(dateStr);
+            date.setHours(0, 0, 0, 0);
+            date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+            const week1 = new Date(date.getFullYear(), 0, 4);
+            const week = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+            return `${date.getFullYear()}-W${week}`;
+        };
 
-        if (latestDate !== today && latestDate !== yesterdayStr) {
-            // Streak broken
-            currentStreak = 0;
+        // Helper to decrement time key
+        const decrementKey = (key) => {
+            if (unit === 'day') {
+                const d = new Date(key);
+                d.setDate(d.getDate() - 1);
+                return d.toISOString().split('T')[0];
+            }
+            if (unit === 'month') {
+                const [y, m] = key.split('-').map(Number);
+                const d = new Date(y, m - 1 - 1, 1);
+                return `${d.getFullYear()}-${d.getMonth() + 1}`;
+            }
+            if (unit === 'week') {
+                // Parse YYYY-Wxx
+                const [y, w] = key.split('-W').map(Number);
+                // Simple approx: subtract 7 days from purely calculated date?
+                // Hard to do strictly with Key string.
+                // Better: Use Date object iteration.
+                return null; // Logic handled below by iterating dates instead
+            }
+        };
+
+        // 3. Group completions by period
+        const counts = {};
+        completions.forEach(c => {
+            if (c.completed) {
+                const key = getTimeKey(c.completion_date.toISOString().split('T')[0]);
+                counts[key] = (counts[key] || 0) + 1;
+            }
+        });
+
+        // 4. Calculate Streak
+        // Strategy: Start from Current Period (Today). 
+        // If Today meets target -> Streak 1. Check Previous.
+        // If Today doesn't meet target -> Check Yesterday/Previous Period? 
+        // (Grace period: If I haven't done it TODAY, but did Yesterday, is streak 0? 
+        //  For Daily: Yes, usually. But typically we show "Streak active" until missed deadline?
+        //  Common logic: If missed yesterday, streak 0. If done yesterday, streak N. If done today, streak N+1.)
+
+        // Let's iterate backwards period by period
+        const todayKey = getTimeKey(new Date().toISOString().split('T')[0]);
+        let checkKey = todayKey;
+
+        // Check if current period is valid
+        if ((counts[checkKey] || 0) >= target) {
+            currentStreak++;
         } else {
-            // Count consecutive completions
-            for (let i = 0; i < completions.length; i++) {
-                if (completions[i].completed) {
-                    currentStreak++;
+            // If current period not done, check if previous period was done
+            // If so, streak is valid but doesn't include current period yet.
+            // UNLESS the current period is OVER? 
+            // For simplicity: We start checking from Today. If not met, we check Yesterday. 
+            // If Yesterday met, streak continues. If Yesterday NOT met, streak broken (0).
 
-                    // Check if next day is consecutive
-                    if (i < completions.length - 1) {
-                        const current = new Date(completions[i].completion_date);
-                        const next = new Date(completions[i + 1].completion_date);
-                        const diffDays = Math.floor((current - next) / (1000 * 60 * 60 * 24));
+            // Wait, if I missed Today, streak is still shown?
+            // "Current Streak" usually implies "Consecutive periods completed ending now".
+            // If Today is Wed, done Mon, Tue. Streak 2. (Today pending).
 
-                        if (diffDays > 1) {
-                            break; // Streak broken
-                        }
-                    }
-                } else {
-                    break; // Missed day
-                }
+            // Adjust start key:
+            let prevKey = decrementKey(todayKey);
+            if (unit === 'week') { // Manual decrement for week
+                const d = new Date();
+                d.setDate(d.getDate() - 7);
+                prevKey = getTimeKey(d.toISOString().split('T')[0]);
             }
-        }
 
-        // Find longest streak
-        let longestStreak = currentStreak;
-        let tempStreak = 0;
-
-        for (const completion of completions) {
-            if (completion.completed) {
-                tempStreak++;
-                longestStreak = Math.max(longestStreak, tempStreak);
+            if ((counts[prevKey] || 0) >= target) {
+                // Current period pending, but previous done. Start counting from previous.
+                checkKey = prevKey;
+                currentStreak++; // Count the previous one
             } else {
-                tempStreak = 0;
+                // Neither Today nor prev done -> Streak 0.
+                await this.updateStreakValue(habitId, 0, habit.longest_streak);
+                return;
             }
         }
 
-        // Update habit
+        // Check previous periods
+        let dateIter = new Date();
+        if (checkKey !== todayKey) dateIter.setDate(dateIter.getDate() - (unit === 'week' ? 7 : unit === 'month' ? 30 : 1)); // Rough backstep to align
+
+        // Robust iteration:
+        // We really just need to walk back Keys.
+        // Given complexity of Calendar math, look at `counts` keys sorted desc?
+        // No, gaps matter.
+
+        // Use a loop MAX 365
+        for (let i = 1; i < 365; i++) {
+            // Decrement date by 1 unit
+            if (unit === 'week') dateIter.setDate(dateIter.getDate() - 7);
+            else if (unit === 'month') dateIter.setMonth(dateIter.getMonth() - 1);
+            else dateIter.setDate(dateIter.getDate() - 1);
+
+            const prevKey = getTimeKey(dateIter.toISOString().split('T')[0]);
+
+            // Stop if we wrapped around or something (sanity check) or hit future
+
+            if ((counts[prevKey] || 0) >= target) {
+                currentStreak++;
+            } else {
+                break;
+            }
+        }
+
+        await this.updateStreakValue(habitId, currentStreak, Math.max(habit.longest_streak, currentStreak));
+    }
+
+    static async updateStreakValue(habitId, current, longest) {
         await db.query(`
-      UPDATE habits
-      SET 
-        current_streak = $1,
-        longest_streak = GREATEST(longest_streak, $2),
-        updated_at = NOW()
-      WHERE id = $3
-    `, [currentStreak, longestStreak, habitId]);
+            UPDATE habits
+            SET current_streak = $1, longest_streak = $2, updated_at = NOW()
+            WHERE id = $3
+        `, [current, longest, habitId]);
     }
 
     /**

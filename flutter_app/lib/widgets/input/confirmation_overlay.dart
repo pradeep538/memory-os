@@ -97,9 +97,7 @@ class _ConfirmationOverlayState extends State<ConfirmationOverlay>
                   onTap: _dismiss,
                   child: FadeTransition(
                     opacity: _fadeAnimation,
-                    child: Container(
-                      color: AppColors.overlay,
-                    ),
+                    child: Container(color: AppColors.overlay),
                   ),
                 ),
 
@@ -107,8 +105,11 @@ class _ConfirmationOverlayState extends State<ConfirmationOverlay>
                 Positioned(
                   left: AppSpacing.md,
                   right: AppSpacing.md,
-                  bottom: AppSpacing.xl +
-                      (MediaQuery.of(context).size.height * _slideAnimation.value * 0.5),
+                  bottom:
+                      AppSpacing.xl +
+                      (MediaQuery.of(context).size.height *
+                          _slideAnimation.value *
+                          0.5),
                   child: FadeTransition(
                     opacity: _fadeAnimation,
                     child: _buildCard(result, isProcessing),
@@ -148,61 +149,97 @@ class _ConfirmationOverlayState extends State<ConfirmationOverlay>
           // Header
           Row(
             children: [
-              const Icon(
-                Icons.edit_note_rounded,
-                color: AppColors.textSecondary,
-                size: 24,
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.question_answer_rounded,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              Text(
-                'Is this correct?',
-                style: AppTypography.h4,
-              ),
+              Text('Review', style: AppTypography.h4),
               const Spacer(),
               ConfidenceIndicator(confidence: confidence),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
 
-          // Original input (if different from enhanced)
-          if (rawInput.isNotEmpty && rawInput != _textController.text) ...[
-            Text(
-              'You said:',
-              style: AppTypography.caption,
+          // Question (Raw Input)
+          if (rawInput.isNotEmpty) ...[
+            Row(
+              children: [
+                Text(
+                  'Question',
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                const Icon(
+                  Icons.mic_none_rounded,
+                  size: 14,
+                  color: AppColors.textSecondary,
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.xs),
-            Text(
-              '"$rawInput"',
-              style: AppTypography.body.copyWith(
-                color: AppColors.textSecondary,
-                fontStyle: FontStyle.italic,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              ),
+              child: Text(
+                rawInput,
+                style: AppTypography.body.copyWith(
+                  fontStyle: FontStyle.italic,
+                  color: AppColors.textPrimary.withOpacity(0.8),
+                ),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
           ],
 
-          // Enhanced text
-          Text(
-            'We understood:',
-            style: AppTypography.caption,
+          // Answer / Log (Enhanced Text)
+          Row(
+            children: [
+              Text(
+                'Answer / Log',
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              const Icon(
+                Icons.auto_awesome_rounded,
+                size: 14,
+                color: AppColors.primary,
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-
-          // Editable text field
+          const SizedBox(height: AppSpacing.xs),
           Container(
             decoration: BoxDecoration(
-              color: _isEditing ? AppColors.inputFill : AppColors.backgroundSecondary,
+              color: _isEditing
+                  ? AppColors.inputFill
+                  : AppColors.backgroundSecondary,
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               border: _isEditing
                   ? Border.all(color: AppColors.primary, width: 2)
-                  : null,
+                  : Border.all(color: AppColors.borderLight),
             ),
             child: TextField(
               controller: _textController,
               enabled: _isEditing && !isProcessing,
               style: AppTypography.body,
-              maxLines: 3,
-              minLines: 1,
+              maxLines: null, // Allow multiline expansion
+              minLines: 2,
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.all(AppSpacing.md),
@@ -214,10 +251,7 @@ class _ConfirmationOverlayState extends State<ConfirmationOverlay>
           // Category selector
           Row(
             children: [
-              Text(
-                'Category:',
-                style: AppTypography.caption,
-              ),
+              Text('Category:', style: AppTypography.caption),
               const SizedBox(width: AppSpacing.sm),
               CategoryChip(category: _selectedCategory ?? 'generic'),
               const Spacer(),
@@ -237,12 +271,11 @@ class _ConfirmationOverlayState extends State<ConfirmationOverlay>
           ),
 
           // Suggestions for very low confidence
-          if (isLowConfidence && suggestions != null && suggestions.isNotEmpty) ...[
+          if (isLowConfidence &&
+              suggestions != null &&
+              suggestions.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.md),
-            Text(
-              'Did you mean:',
-              style: AppTypography.caption,
-            ),
+            Text('Did you mean:', style: AppTypography.caption),
             const SizedBox(height: AppSpacing.sm),
             Wrap(
               spacing: AppSpacing.sm,
@@ -264,10 +297,7 @@ class _ConfirmationOverlayState extends State<ConfirmationOverlay>
                       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                       border: Border.all(color: AppColors.border),
                     ),
-                    child: Text(
-                      suggestion,
-                      style: AppTypography.bodySmall,
-                    ),
+                    child: Text(suggestion, style: AppTypography.bodySmall),
                   ),
                 );
               }).toList(),
@@ -321,12 +351,7 @@ class SuccessToast extends StatefulWidget {
   final VoidCallback? onUndo;
   final VoidCallback? onView;
 
-  const SuccessToast({
-    super.key,
-    required this.text,
-    this.onUndo,
-    this.onView,
-  });
+  const SuccessToast({super.key, required this.text, this.onUndo, this.onView});
 
   @override
   State<SuccessToast> createState() => _SuccessToastState();
@@ -413,7 +438,9 @@ class _SuccessToastState extends State<SuccessToast>
                 onPressed: widget.onUndo,
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.textOnPrimary,
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                  ),
                 ),
                 child: const Text('Undo'),
               ),
@@ -422,7 +449,9 @@ class _SuccessToastState extends State<SuccessToast>
                 onPressed: widget.onView,
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.textOnPrimary,
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                  ),
                 ),
                 child: const Text('View'),
               ),

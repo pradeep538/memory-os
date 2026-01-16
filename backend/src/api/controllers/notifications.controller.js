@@ -11,8 +11,8 @@ class NotificationsController {
         try {
             const { limit } = request.query;
 
-            // TODO: Get userId from auth
-            const userId = '00000000-0000-0000-0000-000000000000';
+            
+            const userId = request.userId;
 
             const notifications = await NotificationModel.getRecentByUser(
                 userId,
@@ -41,8 +41,8 @@ class NotificationsController {
         try {
             const { id } = request.params;
 
-            // TODO: Get userId from auth
-            const userId = '00000000-0000-0000-0000-000000000000';
+            
+            const userId = request.userId;
 
             // Get notification
             const notifications = await NotificationModel.getRecentByUser(userId, 100);
@@ -106,8 +106,8 @@ class NotificationsController {
         try {
             const { jobName } = request.params;
 
-            // TODO: Get userId from auth
-            const userId = '00000000-0000-0000-0000-000000000000';
+            
+            const userId = request.userId;
 
             const result = await schedulerService.runNow(jobName, userId);
 

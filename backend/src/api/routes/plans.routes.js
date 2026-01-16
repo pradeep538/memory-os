@@ -1,12 +1,13 @@
 import planGenerator from '../../services/plans/planGenerator.js';
+import auth from '../../middleware/auth.js';
 
 export default async function planRoutes(fastify, options) {
     /**
      * Generate a new plan
      */
-    fastify.post('/plans/generate', async (request, reply) => {
+    fastify.post('/plans/generate', { preHandler: auth.authenticate }, async (request, reply) => {
         try {
-            const userId = '00000000-0000-0000-0000-000000000000'; // TODO: Auth
+            const userId = request.userId;
             const { category, goal } = request.body;
 
             if (!category) {
@@ -30,7 +31,7 @@ export default async function planRoutes(fastify, options) {
     /**
      * Get available templates
      */
-    fastify.get('/plans/templates/:category', async (request, reply) => {
+    fastify.get('/plans/templates/:category', { preHandler: auth.authenticate }, async (request, reply) => {
         try {
             const { category } = request.params;
             const templates = planGenerator.getAvailableTemplates(category);

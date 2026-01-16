@@ -2,7 +2,11 @@ import inputService from '../../services/understanding/inputService.js';
 import memoryService from '../../services/memory/memoryService.js';
 import llmService from '../../services/understanding/llmService.js';
 import inputEnhancementService from '../../services/input/inputEnhancementService.js';
+import habitService from '../../services/habits/habitService.js';
 import MemoryModel from '../../models/memory.model.js';
+import queue from '../../lib/queue.js';
+import { validationService } from '../../services/validation/validationService.js';
+import { hybridExtractor } from '../../services/extraction/hybridExtractor.js';
 
 class InputController {
     /**
@@ -21,61 +25,229 @@ class InputController {
                 });
             }
 
-            // TODO: Get userId from auth
-            const userId = '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
+            const requestId = request.id;
 
-            // Step 1: Enhance with LLM
+            // Step 1: Save Raw Text Immediately (Resilient Flow)
+            const memory = await MemoryModel.create({
+                userId,
+                rawInput: text,
+                source: 'text',
+                eventType: 'user_log',
+                category: 'generic',
+                normalizedData: {},
+                confidenceScore: 0.0,
+                status: 'processing'
+            });
+
+            // Step 1.5: Try hybrid extraction (NEW - Intent Architecture)
+            let intentExtraction = null;
+            try {
+                intentExtraction = await hybridExtractor.extract(text);
+
+                // If deterministic match, skip LLM and save directly
+                if (intentExtraction.method === 'deterministic' && intentExtraction.confidence === 1.0) {
+                    // Update memory with intent-based data
+                    const updatedMemory = await MemoryModel.updateEnhancement(memory.id, userId, {
+                        intent: intentExtraction.intent,
+                        signals: intentExtraction.signals,
+                        extraction_method: 'deterministic',
+                        confidenceScore: 1.0,
+                        status: 'validated'
+                    });
+
+                    // Apply validation for critical intents
+                    if (['TRACK_MEDICATION', 'TRACK_EXPENSE'].includes(intentExtraction.intent)) {
+                        // Validation already applied in Step 3.5 (below)
+                        // Continue to that step
+                    } else {
+                        // Non-critical: return success immediately
+                        return reply.code(201).send({
+                            success: true,
+                            data: {
+                                auto_processed: true,
+                                memory: updatedMemory,
+                                intent: intentExtraction.intent,
+                                signals: intentExtraction.signals,
+                                method: 'deterministic',
+                                confirmation: `✓ Logged: ${intentExtraction.intent}`
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                console.warn('Hybrid extraction failed, falling back to LLM:', error.message);
+                // Continue to LLM enhancement
+            }
+
+            // Step 2: Enhance with LLM
             const enhancement = await inputEnhancementService.enhance(text, 'text');
 
             if (!enhancement.success) {
-                return reply.code(400).send({
-                    success: false,
-                    error: enhancement.error,
-                    needs_rephrase: true
+                // Determine if we should fail or just keep raw
+                console.warn(`Enhancement failed for memory ${memory.id}: ${enhancement.error}`);
+                await MemoryModel.updateStatus(memory.id, userId, 'failed_enhancement');
+
+                // Return success but with warning (Data is safe!)
+                return reply.code(201).send({
+                    success: true,
+                    data: {
+                        auto_processed: false,
+                        memory: { ...memory, status: 'failed_enhancement' },
+                        confirmation: `✓ Logged raw text (AI enhancement failed)`,
+                        warning: "AI enhancement currently unavailable. Saved as raw text."
+                    }
                 });
             }
 
-            // Step 2: Check confidence threshold
+            // Step 3: Check confidence threshold
             const CONFIDENCE_THRESHOLD = 0.8;
             const needsConfirmation = enhancement.confidence < CONFIDENCE_THRESHOLD;
 
-            // Step 3a: Low confidence - return for user confirmation
             if (needsConfirmation) {
+                // Update with what we have so far, but keep status 'processing' or 'tentative'?
+                // Actually if it needs confirmation, we return 200 and ASK user.
+                // But we already saved to DB.
+                // So we should update DB with "Tentative" data.
+
+                await MemoryModel.updateEnhancement(memory.id, userId, {
+                    rawInput: enhancement.enhanced_text, // Use enhanced text as primary?
+                    category: enhancement.detected_category,
+                    normalizedData: {
+                        original_text: enhancement.raw_text,
+                        ...enhancement.detected_entities,
+                        enhancement_confidence: enhancement.confidence
+                    },
+                    confidenceScore: enhancement.confidence,
+                    status: 'tentative'
+                });
+
                 return reply.code(200).send({
                     success: true,
-                    needs_confirmation: true,
-                    raw_text: enhancement.raw_text,
-                    enhanced_text: enhancement.enhanced_text,
-                    detected_category: enhancement.detected_category,
-                    detected_entities: enhancement.detected_entities,
-                    confidence: enhancement.confidence,
-                    confidence_level: this.getConfidenceLevel(enhancement.confidence),
-                    reasoning: enhancement.reasoning,
-                    suggestions: enhancement.confidence < 0.4 ?
-                        await inputEnhancementService.generateSuggestions(text) : null
+                    data: {
+                        needs_confirmation: true,
+                        memory_id: memory.id, // Client might need this to confirm
+                        raw_text: enhancement.raw_text,
+                        enhanced_text: enhancement.enhanced_text,
+                        detected_category: enhancement.detected_category,
+                        detected_entities: enhancement.detected_entities,
+                        confidence: enhancement.confidence,
+                        confidence_level: this.getConfidenceLevel(enhancement.confidence),
+                        reasoning: enhancement.reasoning,
+                        suggestions: enhancement.confidence < 0.4 ?
+                            await inputEnhancementService.generateSuggestions(text) : null
+                    }
                 });
             }
 
-            // Step 3b: High confidence - auto-process
-            const memory = await this.createMemoryFromEnhancement(
-                userId,
-                enhancement,
-                'text'
-            );
+            // Step 3.5: Validate critical data (NEW)
+            if (['medication', 'finance'].includes(enhancement.detected_category)) {
+                try {
+                    let validation;
+
+                    if (enhancement.detected_category === 'medication') {
+                        validation = await validationService.validateMedicationLog(
+                            userId,
+                            enhancement.enhanced_text,
+                            new Date()
+                        );
+                    } else if (enhancement.detected_category === 'finance') {
+                        const amount = enhancement.detected_entities?.amount;
+                        validation = await validationService.validateFinancialTransaction(
+                            userId,
+                            enhancement.enhanced_text,
+                            amount,
+                            new Date()
+                        );
+                    }
+
+                    if (!validation.valid) {
+                        // Validation failed - return error
+                        await MemoryModel.updateStatus(memory.id, userId, 'validation_failed');
+
+                        return reply.code(400).send({
+                            success: false,
+                            error: 'Validation failed',
+                            errors: validation.errors,
+                            duplicate: validation.duplicate,
+                            memory_id: memory.id
+                        });
+                    }
+
+                    // Add validation metadata
+                    enhancement.detected_entities = {
+                        ...enhancement.detected_entities,
+                        validation_checksum: validation.metadata.checksum,
+                        validated_at: validation.metadata.validated_at
+                    };
+                } catch (error) {
+                    console.error('Validation error:', error);
+                    // Continue without validation if service fails
+                }
+            }
+
+            // Step 4: High confidence - Update to Validated
+            const updatedMemory = await MemoryModel.updateEnhancement(memory.id, userId, {
+                rawInput: enhancement.enhanced_text,
+                category: enhancement.detected_category || 'generic',
+                normalizedData: {
+                    original_text: enhancement.raw_text,
+                    ...enhancement.detected_entities,
+                    enhancement_confidence: enhancement.confidence
+                },
+                confidenceScore: enhancement.confidence,
+                status: 'validated'
+            });
+
+            // Step 4.5: Check for matching habits (NEW)
+            let habitConfirmation = '';
+            try {
+                // A. Check for Completion of EXISTING habits
+                const matchedHabit = await habitService.checkCompletionIntent(userId, enhancement.enhanced_text);
+
+                if (matchedHabit) {
+                    await habitService.logCompletion(matchedHabit.id, userId, true, enhancement.enhanced_text);
+                    habitConfirmation = `\n✓ Checked off habit: "${matchedHabit.habit_name}"`;
+                } else {
+                    // B. Check for Creation of NEW habits (Fallback)
+                    const newHabitData = await habitService.checkCreationIntent(userId, enhancement.enhanced_text);
+                    if (newHabitData) {
+                        const createdHabit = await habitService.createHabit(userId, newHabitData);
+                        habitConfirmation = `\n✓ Created new habit: "${createdHabit.habit_name}" (${createdHabit.habit_type})`;
+                    }
+                }
+            } catch (hError) {
+                console.error('Habit check failed:', hError);
+            }
 
             // Generate success message
-            const confirmation = `✓ Logged! ${enhancement.enhanced_text}`;
+            const confirmation = `✓ Logged! ${enhancement.enhanced_text}${habitConfirmation}`;
+
+            // Step 5: Engagement (Event-Driven) 🚀
+            // Publishing to 'memory.created' triggers immediate feedback & delayed analysis
+            try {
+                await queue.send('memory.created', {
+                    userId,
+                    memoryId: memory.id,
+                    text: enhancement.enhanced_text
+                });
+                console.log(`⚡ Event Published: memory.created for ${requestId || memory.id}`);
+            } catch (qErr) {
+                console.warn('Failed to publish memory.created:', qErr);
+            }
 
             reply.code(201).send({
                 success: true,
-                auto_processed: true,
-                memory,
-                enhancement: {
-                    raw_text: enhancement.raw_text,
-                    enhanced_text: enhancement.enhanced_text,
-                    confidence: enhancement.confidence
-                },
-                confirmation
+                data: {
+                    auto_processed: true,
+                    memory: updatedMemory,
+                    enhancement: {
+                        raw_text: enhancement.raw_text,
+                        enhanced_text: enhancement.enhanced_text,
+                        confidence: enhancement.confidence
+                    },
+                    confirmation
+                }
             });
         } catch (error) {
             request.log.error(error);
@@ -104,7 +276,7 @@ class InputController {
                 });
             }
 
-            const userId = '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
             // Create memory with user-confirmed data
             const memory = await MemoryModel.create({
@@ -120,8 +292,10 @@ class InputController {
 
             reply.code(201).send({
                 success: true,
-                memory,
-                confirmation: `✓ Logged! ${enhanced_text}`
+                data: {
+                    memory,
+                    confirmation: `✓ Logged! ${enhanced_text}`
+                }
             });
         } catch (error) {
             request.log.error(error);
@@ -138,8 +312,7 @@ class InputController {
      */
     async processVoice(request, reply) {
         try {
-            // TODO: Get userId from auth
-            const userId = '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
             // Get audio file from multipart
             const data = await request.file();
@@ -214,7 +387,7 @@ class InputController {
      */
     async getVoiceQuota(request, reply) {
         try {
-            const userId = '00000000-0000-0000-0000-000000000000'; // TODO: Get from auth
+            const userId = request.userId; // TODO: Get from auth
 
             const voiceQuotaService = (await import('../../services/quota/voiceQuotaService.js')).default;
             const userTier = await voiceQuotaService.getUserTier(userId);
@@ -237,12 +410,17 @@ class InputController {
      * Process audio input with Gemini native audio support
      * POST /api/v1/input/audio
      */
+    /**
+     * Process audio input with Gemini native audio support (Async)
+     * POST /api/v1/input/audio
+     */
     async processAudio(request, reply) {
         try {
-            const userId = '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
-            // Import quota service
+            // Import services
             const voiceQuotaService = (await import('../../services/quota/voiceQuotaService.js')).default;
+            const storageService = (await import('../../services/storage/storageService.js')).default;
 
             // Get user tier
             const userTier = await voiceQuotaService.getUserTier(userId);
@@ -271,64 +449,73 @@ class InputController {
 
             const audioBuffer = await data.toBuffer();
 
-            // Validate audio size (max 500KB for 6-second audio)
-            const MAX_AUDIO_SIZE = 500 * 1024; // 500 KB
+            // Validate audio size (max 10MB)
+            const MAX_AUDIO_SIZE = 10 * 1024 * 1024; // 10 MB
             if (audioBuffer.length > MAX_AUDIO_SIZE) {
                 return reply.code(400).send({
                     success: false,
-                    error: `Audio file too large (max 500KB). Your file: ${Math.round(audioBuffer.length / 1024)}KB`
+                    error: `Audio file too large (max 10MB). Your file: ${Math.round(audioBuffer.length / 1024)}KB`
                 });
             }
 
             const duration = parseInt(data.fields?.duration?.value || '6');
-            const mimeType = data.mimetype || 'audio/webm';
+            let mimeType = data.mimetype;
 
-            request.log.info(`Processing audio: ${mimeType}, ${duration}s, ${Math.round(audioBuffer.length / 1024)}KB`);
-
-            const audioEnhancementService = (await import('../../services/input/audioEnhancementService.js')).default;
-            const enhancement = await audioEnhancementService.enhanceFromAudio(audioBuffer, mimeType, duration);
-
-            if (!enhancement.success) {
-                return reply.code(400).send({ success: false, error: enhancement.error || 'Audio processing failed', needs_rephrase: true });
-            }
-
-            const needsConfirmation = enhancement.confidence < 0.8;
-
-            if (needsConfirmation) {
-                return reply.code(200).send({
-                    success: true,
-                    needs_confirmation: true,
-                    transcription: enhancement.transcription,
-                    raw_text: enhancement.transcription,
-                    enhanced_text: enhancement.enhanced_text,
-                    detected_category: enhancement.detected_category,
-                    detected_entities: enhancement.detected_entities,
-                    confidence: enhancement.confidence,
-                    confidence_level: this.getConfidenceLevel(enhancement.confidence),
-                    audio_quality: enhancement.audio_quality
-                });
-            }
-
-            const memory = await this.createMemoryFromEnhancement(userId, { ...enhancement, raw_text: enhancement.transcription }, 'voice');
-
-            // Get updated quota status (reuse existing service instance)
-            const quotaStatus = await voiceQuotaService.getQuotaStatus(userId, userTier);
-
-            reply.code(201).send({
-                success: true,
-                auto_processed: true,
-                memory,
-                transcription: enhancement.transcription,
-                enhancement: { enhanced_text: enhancement.enhanced_text, confidence: enhancement.confidence },
-                confirmation: `✓ Logged! ${enhancement.enhanced_text}`,
-                quota: {
-                    used: quotaStatus.used,
-                    remaining: quotaStatus.remaining,
-                    limit: quotaStatus.limit,
-                    resetsAt: quotaStatus.resetsAt,
-                    warning: quotaStatus.remaining <= 1 ? `Only ${quotaStatus.remaining} voice submission${quotaStatus.remaining === 1 ? '' : 's'} left today!` : null
+            // Fix for octet-stream or missing mime type
+            if (!mimeType || mimeType === 'application/octet-stream') {
+                if (data.filename && data.filename.endsWith('.m4a')) {
+                    mimeType = 'audio/mp4';
+                } else {
+                    mimeType = 'audio/mp3'; // Fallback
                 }
+            }
+
+            request.log.info(`Uploading audio: ${mimeType}, ${duration}s, ${Math.round(audioBuffer.length / 1024)}KB`);
+
+            // Step 1: Upload File
+            const filename = `voice_${userId}_${Date.now()}.m4a`; // Assume m4a/mp4 container
+            const uploadResult = await storageService.saveFile(audioBuffer, filename, mimeType);
+
+            // Step 2: Create Memory (Processing Status)
+            const memory = await MemoryModel.create({
+                userId,
+                rawInput: '[Audio Payload Processing]', // Temporary placeholder
+                source: 'voice',
+                eventType: 'user_log',
+                category: 'generic',
+                normalizedData: {
+                    audio_path: uploadResult.key,
+                    audio_url: uploadResult.url,
+                    mime_type: mimeType,
+                    duration: duration,
+                    client_timestamp: new Date().toISOString()
+                },
+                confidenceScore: 0.0,
+                status: 'processing'
             });
+
+            // Return 202 Accepted immediately
+            const responseData = {
+                success: true,
+                data: {
+                    auto_processed: false, // Async
+                    message: "Audio uploaded. Processing in background.",
+                    quota: {
+                        remaining: quotaCheck.remaining - 1 // Deduct 1 optimistically
+                    }
+                }
+            };
+
+            // Publish to Queue
+            try {
+                const jobId = await queue.send('process-memory', { memoryId: memory.id });
+                console.log(`📤 Job Published: ${jobId} for Memory: ${memory.id}`);
+            } catch (qErr) {
+                console.error('❌ Queue Publish Failed:', qErr);
+                // Potential fallback: retry logic or alert
+            }
+
+            reply.code(202).send(responseData);
 
         } catch (error) {
             request.log.error(error);

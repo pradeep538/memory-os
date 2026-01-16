@@ -1,4 +1,5 @@
 import notificationsController from '../controllers/notifications.controller.js';
+import auth from '../../middleware/auth.js';
 
 /**
  * Notifications routes plugin
@@ -7,6 +8,7 @@ import notificationsController from '../controllers/notifications.controller.js'
 async function notificationsRoutes(fastify, options) {
     // Get user's notifications
     fastify.get('/', {
+        preHandler: auth.authenticate,
         schema: {
             description: 'Get user notifications',
             tags: ['notifications'],
@@ -21,6 +23,7 @@ async function notificationsRoutes(fastify, options) {
 
     // Reveal insight (when user taps notification)
     fastify.get('/:id/reveal', {
+        preHandler: auth.authenticate,
         schema: {
             description: 'Reveal the insight behind a notification',
             tags: ['notifications'],
@@ -35,6 +38,7 @@ async function notificationsRoutes(fastify, options) {
 
     // Trigger job manually (for testing)
     fastify.post('/trigger/:jobName', {
+        preHandler: auth.authenticate,
         schema: {
             description: 'Manually trigger a scheduled job (testing only)',
             tags: ['notifications', 'testing'],

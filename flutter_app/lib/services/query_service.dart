@@ -15,4 +15,35 @@ class QueryService {
       fromJson: (json) => QueryResult.fromJson(json),
     );
   }
+
+  /// Ask a voice query with consistency data
+  Future<QueryResult> askVoiceQuery(
+    List<int> audioBytes,
+    String mimeType,
+  ) async {
+    final response = await _client.post(
+      '/query/voice',
+      body: {'audio': String.fromCharCodes(audioBytes), 'mimeType': mimeType},
+    );
+
+    if (response.success) {
+      return QueryResult.fromJson(response.data);
+    } else {
+      throw Exception(response.error ?? 'Failed to process voice query');
+    }
+  }
+
+  /// Ask a text query with consistency data (for testing)
+  Future<QueryResult> askTextQuery(String question) async {
+    final response = await _client.post(
+      '/query/text',
+      body: {'question': question},
+    );
+
+    if (response.success) {
+      return QueryResult.fromJson(response.data);
+    } else {
+      throw Exception(response.error ?? 'Failed to process text query');
+    }
+  }
 }

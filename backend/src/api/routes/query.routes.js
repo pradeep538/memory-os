@@ -40,6 +40,50 @@ async function queryRoutes(fastify, options) {
             }
         }
     }, queryController.query.bind(queryController));
+
+    // Voice query with consistency
+    fastify.post('/voice', {
+        schema: {
+            description: 'Ask questions via voice with consistency tracking',
+            tags: ['query'],
+            body: {
+                type: 'object',
+                required: ['audio'],
+                properties: {
+                    audio: {
+                        type: 'string',
+                        description: 'Base64 encoded audio'
+                    },
+                    mimeType: {
+                        type: 'string',
+                        default: 'audio/webm'
+                    }
+                }
+            }
+        }
+    }, queryController.voiceQuery.bind(queryController));
+
+    // Text query with consistency (for testing)
+    fastify.post('/text', {
+        schema: {
+            description: 'Ask questions via text with consistency tracking',
+            tags: ['query'],
+            body: {
+                type: 'object',
+                required: ['question'],
+                properties: {
+                    question: {
+                        type: 'string',
+                        examples: [
+                            'Did I take vitamin C today?',
+                            'When did I last water the plants?',
+                            'How often do I exercise?'
+                        ]
+                    }
+                }
+            }
+        }
+    }, queryController.textQuery.bind(queryController));
 }
 
 export default queryRoutes;

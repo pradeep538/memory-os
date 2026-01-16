@@ -11,7 +11,7 @@ class CorrelationController {
      */
     async getUserCorrelations(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
             const { status, min_coefficient, lag_days } = request.query;
 
             const correlations = await correlationService.getUserCorrelations(
@@ -44,7 +44,7 @@ class CorrelationController {
     async getCorrelation(request, reply) {
         try {
             const { id } = request.params;
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
             const correlation = await correlationService.getCorrelation(id, userId);
 
@@ -75,7 +75,7 @@ class CorrelationController {
      */
     async calculateCorrelations(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
             const { max_lag_days = 3, min_samples = 7 } = request.body || {};
 
             const results = await correlationService.calculateCorrelations(
@@ -105,7 +105,7 @@ class CorrelationController {
         try {
             const { id } = request.params;
             const { status } = request.body;
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
             if (!['active', 'pinned', 'dismissed'].includes(status)) {
                 reply.code(400);
@@ -151,7 +151,7 @@ class CorrelationController {
         try {
             const { id } = request.params;
             const { is_helpful, comment } = request.body;
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
             if (typeof is_helpful !== 'boolean') {
                 reply.code(400);
@@ -188,7 +188,7 @@ class CorrelationController {
      */
     async getStats(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
             const stats = await correlationService.getCorrelationStats(userId);
 

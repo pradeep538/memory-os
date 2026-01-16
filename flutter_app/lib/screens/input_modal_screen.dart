@@ -73,7 +73,8 @@ class _InputModalScreenState extends State<InputModalScreen>
     final maxDuration = inputProvider.maxRecordingDuration;
 
     final tempDir = await getTemporaryDirectory();
-    _recordingPath = '${tempDir.path}/voice_input_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    _recordingPath =
+        '${tempDir.path}/voice_input_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
     await _audioRecorder.start(
       const RecordConfig(
@@ -269,7 +270,8 @@ class _InputModalScreenState extends State<InputModalScreen>
               child: isProcessing
                   ? const Center(
                       child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(AppColors.primary),
                       ),
                     )
                   : const Icon(
@@ -441,7 +443,8 @@ class _InputModalScreenState extends State<InputModalScreen>
                 child: LinearProgressIndicator(
                   value: progress,
                   backgroundColor: AppColors.recordingLight,
-                  valueColor: const AlwaysStoppedAnimation<Color>(AppColors.recording),
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(AppColors.recording),
                   minHeight: 8,
                 ),
               ),

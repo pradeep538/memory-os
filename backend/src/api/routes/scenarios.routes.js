@@ -1,13 +1,14 @@
 import scenarioDetector from '../../services/scenarios/scenarioDetector.js';
 import db from '../../db/index.js';
+import auth from '../../middleware/auth.js';
 
 export default async function scenarioRoutes(fastify, options) {
     /**
      * Detect scenarios for a user
      */
-    fastify.post('/scenarios/detect', async (request, reply) => {
+    fastify.post('/scenarios/detect', { preHandler: auth.authenticate }, async (request, reply) => {
         try {
-            const userId = '00000000-0000-0000-0000-000000000000'; // TODO: Auth
+            const userId = request.userId;
 
             const scenarios = await scenarioDetector.detectScenarios(userId);
 
@@ -26,7 +27,7 @@ export default async function scenarioRoutes(fastify, options) {
     /**
      * Get pending scenarios (for admin panel)
      */
-    fastify.get('/scenarios/pending', async (request, reply) => {
+    fastify.get('/scenarios/pending', { preHandler: auth.authenticate }, async (request, reply) => {
         try {
             const query = `
         SELECT * FROM nudge_campaigns
@@ -51,7 +52,7 @@ export default async function scenarioRoutes(fastify, options) {
     /**
      * Manually approve scenario (for admin panel)
      */
-    fastify.post('/scenarios/:id/approve', async (request, reply) => {
+    fastify.post('/scenarios/:id/approve', { preHandler: auth.authenticate }, async (request, reply) => {
         try {
             const { id } = request.params;
 

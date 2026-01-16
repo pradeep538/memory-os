@@ -41,12 +41,17 @@ class Habit {
       habitType: json['habit_type'] ?? json['habitType'] ?? 'build',
       category: json['category'] ?? 'generic',
       targetFrequency: json['target_frequency'] ?? json['targetFrequency'] ?? 1,
-      targetFrequencyUnit: json['target_frequency_unit'] ?? json['targetFrequencyUnit'] ?? 'day',
+      targetFrequencyUnit:
+          json['target_frequency_unit'] ?? json['targetFrequencyUnit'] ?? 'day',
       status: json['status'] ?? 'active',
       currentStreak: json['current_streak'] ?? json['currentStreak'] ?? 0,
       longestStreak: json['longest_streak'] ?? json['longestStreak'] ?? 0,
-      completionRate: (json['completion_rate'] ?? json['completionRate'] ?? 0.0).toDouble(),
-      reminderEnabled: json['reminder_enabled'] ?? json['reminderEnabled'] ?? false,
+      completionRate: json['completion_rate'] is String
+          ? double.tryParse(json['completion_rate']) ?? 0.0
+          : (json['completion_rate'] ?? json['completionRate'] ?? 0.0)
+                .toDouble(),
+      reminderEnabled:
+          json['reminder_enabled'] ?? json['reminderEnabled'] ?? false,
       reminderTime: json['reminder_time'] ?? json['reminderTime'],
       reminderDays: json['reminder_days'] != null
           ? List<int>.from(json['reminder_days'])
@@ -90,10 +95,13 @@ class HabitProgress {
       habitId: json['habit_id'] ?? json['habitId'] ?? '',
       currentStreak: json['current_streak'] ?? json['currentStreak'] ?? 0,
       longestStreak: json['longest_streak'] ?? json['longestStreak'] ?? 0,
-      completionRate: (json['completion_rate'] ?? json['completionRate'] ?? 0.0).toDouble(),
-      totalCompletions: json['total_completions'] ?? json['totalCompletions'] ?? 0,
+      completionRate: (json['completion_rate'] ?? json['completionRate'] ?? 0.0)
+          .toDouble(),
+      totalCompletions:
+          json['total_completions'] ?? json['totalCompletions'] ?? 0,
       totalMissed: json['total_missed'] ?? json['totalMissed'] ?? 0,
-      history: (json['history'] as List?)
+      history:
+          (json['history'] as List?)
               ?.map((e) => HabitHistoryItem.fromJson(e))
               .toList() ??
           [],
@@ -107,11 +115,7 @@ class HabitHistoryItem {
   final bool completed;
   final String? notes;
 
-  HabitHistoryItem({
-    required this.date,
-    required this.completed,
-    this.notes,
-  });
+  HabitHistoryItem({required this.date, required this.completed, this.notes});
 
   factory HabitHistoryItem.fromJson(Map<String, dynamic> json) {
     return HabitHistoryItem(
@@ -178,8 +182,12 @@ class HabitSuggestion {
       habitType: json['habit_type'] ?? json['habitType'] ?? 'build',
       category: json['category'] ?? 'generic',
       reason: json['reason'] ?? '',
-      suggestedFrequency: json['suggested_frequency'] ?? json['suggestedFrequency'] ?? 1,
-      suggestedFrequencyUnit: json['suggested_frequency_unit'] ?? json['suggestedFrequencyUnit'] ?? 'day',
+      suggestedFrequency:
+          json['suggested_frequency'] ?? json['suggestedFrequency'] ?? 1,
+      suggestedFrequencyUnit:
+          json['suggested_frequency_unit'] ??
+          json['suggestedFrequencyUnit'] ??
+          'day',
     );
   }
 }

@@ -1,0 +1,11 @@
+# Sensitive Configuration Files
+.env
+google-services.json
+mem-os-93a6a-firebase-adminsdk-fbsvc-0db80eb1b9.json
+
+# Flutter/Android specifics ensuring they are ignored if in root or subdirs
+**/google-services.json
+**/*.env
+
+# System
+.DS_Store

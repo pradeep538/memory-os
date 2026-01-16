@@ -1,16 +1,20 @@
-import FinanceModule from '../../src/modules/finance/finance.module.js';
-import db from '../../src/db/index.js';
+import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 
-jest.mock('../../src/db/index.js', () => ({
+jest.unstable_mockModule('../../src/db/index.js', () => ({
     default: {
         query: jest.fn()
     }
 }));
 
+const { default: FinanceModule } = await import('../../src/modules/finance/finance.module.js');
+const { default: db } = await import('../../src/db/index.js');
+
 describe('FinanceModule', () => {
     let module;
 
     beforeEach(() => {
+        console.log('DEBUG: db object:', db);
+        console.log('DEBUG: db.query type:', typeof db.query);
         module = new FinanceModule();
         jest.clearAllMocks();
     });

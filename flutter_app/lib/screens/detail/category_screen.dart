@@ -7,7 +7,6 @@ import '../../config/config.dart';
 import '../../models/input_models.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/common/mini_chart.dart';
-import '../../widgets/common/progress_ring.dart';
 import 'memories_screen.dart';
 
 /// Category Explorer Screen - Deep dive into a specific category
@@ -47,7 +46,10 @@ class _CategoryScreenState extends State<CategoryScreen>
 
     // Load stats and memories in parallel
     final statsResult = await app.memoryService.getCategoryStats();
-    final memoriesResult = await app.memoryService.getMemories(category: widget.category.name, limit: 5);
+    final memoriesResult = await app.memoryService.getMemories(
+      category: widget.category.name,
+      limit: 5,
+    );
 
     if (mounted) {
       setState(() {
@@ -73,9 +75,7 @@ class _CategoryScreenState extends State<CategoryScreen>
               pinned: true,
               backgroundColor: color,
               foregroundColor: AppColors.textOnPrimary,
-              flexibleSpace: FlexibleSpaceBar(
-                background: _buildHeader(color),
-              ),
+              flexibleSpace: FlexibleSpaceBar(background: _buildHeader(color)),
               bottom: TabBar(
                 controller: _tabController,
                 indicatorColor: AppColors.textOnPrimary,
@@ -113,12 +113,7 @@ class _CategoryScreenState extends State<CategoryScreen>
           colors: [color, color.withAlpha(204)],
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        100,
-        AppSpacing.lg,
-        60,
-      ),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 100, AppSpacing.lg, 60),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -277,7 +272,9 @@ class _CategoryScreenState extends State<CategoryScreen>
           if (_recentMemories.isEmpty)
             _buildEmptyRecentMemories()
           else
-            ..._recentMemories.map((memory) => _RecentMemoryTile(memory: memory)),
+            ..._recentMemories.map(
+              (memory) => _RecentMemoryTile(memory: memory),
+            ),
         ],
       ),
     );
@@ -293,11 +290,7 @@ class _CategoryScreenState extends State<CategoryScreen>
       ),
       child: Column(
         children: [
-          Icon(
-            widget.category.icon,
-            size: 48,
-            color: AppColors.textTertiary,
-          ),
+          Icon(widget.category.icon, size: 48, color: AppColors.textTertiary),
           const SizedBox(height: AppSpacing.md),
           Text(
             'No entries yet',
@@ -690,10 +683,7 @@ class _StatCard extends StatelessWidget {
         children: [
           Text(title, style: AppTypography.caption),
           const SizedBox(height: AppSpacing.xs),
-          Text(
-            value,
-            style: AppTypography.numberLarge.copyWith(color: color),
-          ),
+          Text(value, style: AppTypography.numberLarge.copyWith(color: color)),
           Text(subtitle, style: AppTypography.caption),
         ],
       ),
@@ -737,10 +727,7 @@ class _DetailStatCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text(
-                value,
-                style: AppTypography.h4.copyWith(color: color),
-              ),
+              Text(value, style: AppTypography.h4.copyWith(color: color)),
               const SizedBox(width: 4),
               Text(unit, style: AppTypography.caption),
             ],

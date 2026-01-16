@@ -18,5 +18,13 @@ export default {
     googleCloud: {
         credentials: process.env.GOOGLE_APPLICATION_CREDENTIALS,
         apiKey: process.env.GOOGLE_CLOUD_API_KEY
-    }
+    },
+
+    firebase: {
+        serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH
+    },
+
+    // Computed properties
+    get isDev() { return this.env === 'development' || this.env === 'test'; },
+    get isProd() { return this.env === 'production'; }
 };

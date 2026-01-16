@@ -9,8 +9,8 @@ class InsightsController {
         try {
             const { refresh } = request.query;
 
-            // TODO: Get userId from auth
-            const userId = '00000000-0000-0000-0000-000000000000';
+            
+            const userId = request.userId;
 
             const insights = refresh === 'true'
                 ? await insightsService.refreshInsights(userId)
@@ -39,8 +39,8 @@ class InsightsController {
         try {
             const { category } = request.params;
 
-            // TODO: Get userId from auth
-            const userId = '00000000-0000-0000-0000-000000000000';
+            
+            const userId = request.userId;
 
             const insights = await insightsService.getCategoryInsights(userId, category);
 
@@ -65,8 +65,8 @@ class InsightsController {
      */
     async refreshInsights(request, reply) {
         try {
-            // TODO: Get userId from auth
-            const userId = '00000000-0000-0000-0000-000000000000';
+            
+            const userId = request.userId;
 
             const insights = await insightsService.refreshInsights(userId);
 
@@ -75,6 +75,31 @@ class InsightsController {
                 data: insights,
                 count: insights.length,
                 message: 'Insights refreshed from analytics'
+            });
+        } catch (error) {
+            request.log.error(error);
+            reply.code(500).send({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Get patterns for user
+     * GET /api/v1/insights/patterns
+     */
+    async getPatterns(request, reply) {
+        try {
+            
+            const userId = request.userId;
+
+            const patterns = await insightsService.getPatterns(userId);
+
+            reply.send({
+                success: true,
+                data: patterns,
+                count: patterns.length
             });
         } catch (error) {
             request.log.error(error);

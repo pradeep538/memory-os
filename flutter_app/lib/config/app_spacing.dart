@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Memory OS Spacing System
+/// Kairo Spacing System
 /// Consistent spacing for clean, minimal UI
 class AppSpacing {
   AppSpacing._();
@@ -59,10 +59,18 @@ class AppSpacing {
   // BORDER RADIUS PRESETS
   // ============================================================================
 
-  static const BorderRadius borderRadiusSm = BorderRadius.all(Radius.circular(radiusSm));
-  static const BorderRadius borderRadiusMd = BorderRadius.all(Radius.circular(radiusMd));
-  static const BorderRadius borderRadiusLg = BorderRadius.all(Radius.circular(radiusLg));
-  static const BorderRadius borderRadiusXl = BorderRadius.all(Radius.circular(radiusXl));
+  static const BorderRadius borderRadiusSm = BorderRadius.all(
+    Radius.circular(radiusSm),
+  );
+  static const BorderRadius borderRadiusMd = BorderRadius.all(
+    Radius.circular(radiusMd),
+  );
+  static const BorderRadius borderRadiusLg = BorderRadius.all(
+    Radius.circular(radiusLg),
+  );
+  static const BorderRadius borderRadiusXl = BorderRadius.all(
+    Radius.circular(radiusXl),
+  );
 
   // ============================================================================
   // EDGE INSETS PRESETS
@@ -73,10 +81,16 @@ class AppSpacing {
   static const EdgeInsets paddingMd = EdgeInsets.all(md);
   static const EdgeInsets paddingLg = EdgeInsets.all(lg);
 
-  static const EdgeInsets paddingHorizontalMd = EdgeInsets.symmetric(horizontal: md);
-  static const EdgeInsets paddingHorizontalLg = EdgeInsets.symmetric(horizontal: lg);
+  static const EdgeInsets paddingHorizontalMd = EdgeInsets.symmetric(
+    horizontal: md,
+  );
+  static const EdgeInsets paddingHorizontalLg = EdgeInsets.symmetric(
+    horizontal: lg,
+  );
 
-  static const EdgeInsets paddingScreen = EdgeInsets.symmetric(horizontal: screenPadding);
+  static const EdgeInsets paddingScreen = EdgeInsets.symmetric(
+    horizontal: screenPadding,
+  );
 
   // ============================================================================
   // ICON SIZES

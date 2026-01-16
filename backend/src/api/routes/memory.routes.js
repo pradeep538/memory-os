@@ -1,4 +1,5 @@
 import memoryController from '../controllers/memory.controller.js';
+import auth from '../../middleware/auth.js';
 
 /**
  * Memory routes plugin
@@ -7,6 +8,7 @@ import memoryController from '../controllers/memory.controller.js';
 async function memoryRoutes(fastify, options) {
     // Create memory
     fastify.post('/', {
+        preHandler: auth.authenticate,
         schema: {
             description: 'Create a new memory unit',
             tags: ['memory'],
@@ -37,6 +39,7 @@ async function memoryRoutes(fastify, options) {
 
     // List memories
     fastify.get('/', {
+        preHandler: auth.authenticate,
         schema: {
             description: 'Get user memories with optional filters',
             tags: ['memory'],
@@ -66,6 +69,7 @@ async function memoryRoutes(fastify, options) {
 
     // Category statistics
     fastify.get('/stats/categories', {
+        preHandler: auth.authenticate,
         schema: {
             description: 'Get memory count by category',
             tags: ['memory', 'stats'],
@@ -74,7 +78,10 @@ async function memoryRoutes(fastify, options) {
                     type: 'object',
                     properties: {
                         success: { type: 'boolean' },
-                        data: { type: 'array' }
+                        data: {
+                            type: 'object',
+                            additionalProperties: { type: 'number' }
+                        }
                     }
                 }
             }
@@ -83,6 +90,7 @@ async function memoryRoutes(fastify, options) {
 
     // Get single memory
     fastify.get('/:id', {
+        preHandler: auth.authenticate,
         schema: {
             description: 'Get a specific memory by ID',
             tags: ['memory'],
@@ -97,6 +105,7 @@ async function memoryRoutes(fastify, options) {
 
     // Correct memory
     fastify.post('/:id/correct', {
+        preHandler: auth.authenticate,
         schema: {
             description: 'Create a correction for an existing memory',
             tags: ['memory'],

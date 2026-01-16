@@ -1,101 +1,46 @@
-import engagementController from '../controllers/engagement.controller.js';
 
-export default async function engagementRoutes(fastify, options) {
-    /**
-     * Get user engagement data
-     */
-    fastify.get('/engagement', {
-        schema: {
-            description: 'Get user engagement data',
-            tags: ['engagement']
-        }
-    }, engagementController.getEngagement.bind(engagementController));
+import feedService from '../../services/engagement/feedService.js';
+import feedbackService from '../../services/engagement/feedbackService.js';
 
-    /**
-     * Get engagement summary with analytics
-     */
-    fastify.get('/engagement/summary', {
-        schema: {
-            description: 'Get comprehensive engagement summary',
-            tags: ['engagement']
-        }
-    }, engagementController.getEngagementSummary.bind(engagementController));
+export default async function (fastify, opts) {
 
-    /**
-     * Get engagement analytics
-     */
-    fastify.get('/engagement/analytics', {
-        schema: {
-            description: 'Get engagement analytics for specified period',
-            tags: ['engagement'],
-            querystring: {
-                type: 'object',
-                properties: {
-                    days: { type: 'integer', default: 30 }
-                }
-            }
+    // GET /api/v1/feed
+    fastify.get('/feed', async (request, reply) => {
+        try {
+            const feed = await feedService.getFeed(request.userId);
+            return {
+                success: true,
+                data: feed
+            };
+        } catch (err) {
+            request.log.error(err);
+            return reply.code(500).send({ success: false, error: err.message });
         }
-    }, engagementController.getAnalytics.bind(engagementController));
+    });
 
-    /**
-     * Get streak history
-     */
-    fastify.get('/engagement/streaks', {
-        schema: {
-            description: 'Get streak history and activity calendar',
-            tags: ['engagement']
+    // POST /api/v1/feed/:id/read
+    fastify.post('/feed/:id/read', async (request, reply) => {
+        try {
+            const { id } = request.params;
+            await feedService.markRead(id, request.userId);
+            return { success: true };
+        } catch (err) {
+            request.log.error(err);
+            return reply.code(500).send({ success: false, error: err.message });
         }
-    }, engagementController.getStreaks.bind(engagementController));
+    });
 
-    /**
-     * Get milestones
-     */
-    fastify.get('/engagement/milestones', {
-        schema: {
-            description: 'Get achieved and upcoming milestones',
-            tags: ['engagement']
+    // GET /api/v1/feedback/latest (Immediate Feedback Polling)
+    fastify.get('/feedback/latest', async (request, reply) => {
+        try {
+            const feedback = await feedbackService.getLatest(request.userId);
+            return {
+                success: true,
+                data: feedback // null if no recent feedback
+            };
+        } catch (err) {
+            request.log.error(err);
+            return reply.code(500).send({ success: false, error: err.message });
         }
-    }, engagementController.getMilestones.bind(engagementController));
-
-    /**
-     * Get leaderboard
-     */
-    fastify.get('/engagement/leaderboard', {
-        schema: {
-            description: 'Get engagement leaderboard',
-            tags: ['engagement'],
-            querystring: {
-                type: 'object',
-                properties: {
-                    limit: { type: 'integer', default: 10 }
-                }
-            }
-        }
-    }, engagementController.getLeaderboard.bind(engagementController));
-
-    /**
-     * Refresh engagement score
-     */
-    fastify.post('/engagement/refresh', {
-        schema: {
-            description: 'Recalculate and update engagement score',
-            tags: ['engagement']
-        }
-    }, engagementController.refreshScore.bind(engagementController));
-
-    /**
-     * Get at-risk users (admin)
-     */
-    fastify.get('/engagement/at-risk', {
-        schema: {
-            description: 'Get users at risk of dropping off',
-            tags: ['engagement'],
-            querystring: {
-                type: 'object',
-                properties: {
-                    threshold: { type: 'integer', default: 30 }
-                }
-            }
-        }
-    }, engagementController.getAtRiskUsers.bind(engagementController));
+    });
 }

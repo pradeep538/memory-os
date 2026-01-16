@@ -10,6 +10,7 @@ class AppProvider extends ChangeNotifier {
   late final InsightsService insightsService;
   late final EngagementService engagementService;
   late final NotificationsService notificationsService;
+  late final FeatureFlagService featureFlagService;
   late final QueryService queryService;
 
   bool _isInitialized = false;
@@ -24,11 +25,13 @@ class AppProvider extends ChangeNotifier {
 
   void _initServices() {
     _apiClient = ApiClient();
+    featureFlagService = FeatureFlagService(_apiClient);
+    featureFlagService.init(); // Start async init
     inputService = InputService(_apiClient);
     memoryService = MemoryService(_apiClient);
     habitsService = HabitsService(_apiClient);
     insightsService = InsightsService(_apiClient);
-    engagementService = EngagementService(_apiClient);
+    engagementService = EngagementService();
     notificationsService = NotificationsService(_apiClient);
     queryService = QueryService(_apiClient);
     _isInitialized = true;

@@ -8,6 +8,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- 1. Users
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    firebase_uid VARCHAR(128) UNIQUE,
     username VARCHAR(100) UNIQUE,
     email VARCHAR(255) UNIQUE,
     subscription_tier VARCHAR(20) DEFAULT 'free',
@@ -16,6 +17,8 @@ CREATE TABLE users (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX idx_users_firebase_uid ON users(firebase_uid);
 
 -- 2. Memory Units (Immutable Event Log)
 CREATE TABLE memory_units (
@@ -559,3 +562,55 @@ CREATE INDEX idx_engagement_analytics ON user_engagement(engagement_score DESC, 
 
 COMMENT ON INDEX idx_metrics_aggregations IS 'Optimized for SUM, AVG, COUNT queries by date range';
 COMMENT ON INDEX idx_habit_progress IS 'Fast habit streak and completion rate calculations';
+
+-- ============================================
+-- 7. FEATURE FLAGS (Dynamic Visibility)
+-- ============================================
+
+CREATE TABLE feature_flags (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    feature_key VARCHAR(50) NOT NULL UNIQUE,
+    is_enabled BOOLEAN DEFAULT true,
+    visibility_type VARCHAR(50) DEFAULT 'always', 
+    param_duration_days INT,
+    description TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_feature_flags_key ON feature_flags(feature_key);
+
+-- ----------------------------------------------------
+-- Phase 10: Engagement & Stickiness
+-- ----------------------------------------------------
+
+-- Immediate feedback shown after logging
+CREATE TABLE user_feedback (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    message TEXT NOT NULL,
+    context TEXT NOT NULL, -- 'post_log', 'streak', 'recovery'
+    is_read BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Narrative Feed Items (The "Sticky" Core)
+CREATE TABLE feed_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type TEXT NOT NULL, -- 'insight', 'reflection', 'pattern', 'voice_replay'
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    data JSONB DEFAULT '{}', -- Extra metadata (e.g. voice_url)
+    is_read BOOLEAN DEFAULT false,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Identity Badges
+CREATE TABLE identity_progress (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    label TEXT NOT NULL, -- e.g. 'Consistent Mover'
+    reason TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);

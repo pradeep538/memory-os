@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 class Settings(BaseSettings):
     # Server
@@ -11,6 +12,9 @@ class Settings(BaseSettings):
     
     # API Keys (if needed for integrations)
     backend_api_url: str = "http://localhost:3000"
+    
+    # Firebase (optional for auth)
+    firebase_service_account_path: Optional[str] = None
     
     class Config:
         env_file = ".env"

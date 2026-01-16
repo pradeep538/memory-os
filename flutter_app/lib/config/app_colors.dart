@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Memory OS Color System
+/// Kairo Color System
 /// Voice-first, clean, minimal design with mint/teal accents
 class AppColors {
   AppColors._();
@@ -149,5 +149,4 @@ class AppColors {
     if (confidence >= 0.5) return confidenceMedium;
     return confidenceLow;
   }
-
 }

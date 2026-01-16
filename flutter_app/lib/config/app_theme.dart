@@ -4,7 +4,7 @@ import 'app_colors.dart';
 import 'app_typography.dart';
 import 'app_spacing.dart';
 
-/// Memory OS Theme Configuration
+/// Kairo Theme Configuration
 class AppTheme {
   AppTheme._();
 
@@ -35,9 +35,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         elevation: 0,
         color: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: AppSpacing.borderRadiusLg,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: AppSpacing.borderRadiusLg),
         margin: EdgeInsets.zero,
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -97,13 +95,13 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: AppSpacing.borderRadiusMd,
           ),
-          textStyle: AppTypography.button.copyWith(color: AppColors.textPrimary),
+          textStyle: AppTypography.button.copyWith(
+            color: AppColors.textPrimary,
+          ),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
-        style: IconButton.styleFrom(
-          foregroundColor: AppColors.textSecondary,
-        ),
+        style: IconButton.styleFrom(foregroundColor: AppColors.textSecondary),
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: AppColors.surface,
@@ -136,10 +134,10 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.textPrimary,
-        contentTextStyle: AppTypography.body.copyWith(color: AppColors.textOnPrimary),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppSpacing.borderRadiusMd,
+        contentTextStyle: AppTypography.body.copyWith(
+          color: AppColors.textOnPrimary,
         ),
+        shape: RoundedRectangleBorder(borderRadius: AppSpacing.borderRadiusMd),
         behavior: SnackBarBehavior.floating,
       ),
     );

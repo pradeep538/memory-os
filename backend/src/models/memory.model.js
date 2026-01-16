@@ -54,6 +54,12 @@ class MemoryModel {
      * Get memory by ID
      */
     static async findById(id, userId) {
+        if (!userId) {
+            const query = `SELECT * FROM memory_units WHERE id = $1`;
+            const result = await db.query(query, [id]);
+            return result.rows[0];
+        }
+
         const query = `
       SELECT * FROM memory_units
       WHERE id = $1 AND user_id = $2
@@ -115,9 +121,6 @@ class MemoryModel {
         return result.rows;
     }
 
-    /**
-     * Update memory status
-     */
     static async updateStatus(id, userId, status) {
         const query = `
       UPDATE memory_units
@@ -126,6 +129,36 @@ class MemoryModel {
       RETURNING *
     `;
         const result = await db.query(query, [status, id, userId]);
+        return result.rows[0];
+    }
+
+    /**
+     * Update memory with enhancement results
+     */
+    static async updateEnhancement(id, userId, data) {
+        const { rawInput, category, normalizedData, confidenceScore, status } = data;
+        const query = `
+            UPDATE memory_units
+            SET 
+                raw_input = COALESCE($1, raw_input),
+                category = COALESCE($2, category),
+                normalized_data = $3,
+                confidence_score = $4,
+                status = $5,
+                updated_at = NOW()
+            WHERE id = $6 AND user_id = $7
+            RETURNING *
+        `;
+        const values = [
+            rawInput,
+            category,
+            normalizedData,
+            confidenceScore,
+            status,
+            id,
+            userId
+        ];
+        const result = await db.query(query, values);
         return result.rows[0];
     }
 
@@ -165,19 +198,40 @@ class MemoryModel {
     }
 
     /**
-     * Get memory count by category for user
+     * Get memories needing background processing
+     * Status: 'processing' or 'transcribed' or 'failed_enhancement'
+     */
+    static async findPendingProcessing(limit = 10) {
+        const query = `
+            SELECT * FROM memory_units
+            WHERE status IN ('processing', 'transcribed', 'failed_enhancement')
+            ORDER BY created_at ASC
+            LIMIT $1
+        `;
+        const result = await db.query(query, [limit]);
+        return result.rows;
+    }
+
+    /**
+     * Get memory count by category for a user
      */
     static async getCountByCategory(userId) {
         const query = `
-      SELECT category, COUNT(*) as count
-      FROM memory_units
-      WHERE user_id = $1
-      GROUP BY category
-      ORDER BY count DESC
-    `;
+            SELECT category, COUNT(*) as count 
+            FROM memory_units 
+            WHERE user_id = $1 AND status != 'deleted'
+            GROUP BY category
+            ORDER BY count DESC
+        `;
         const result = await db.query(query, [userId]);
-        return result.rows;
+
+        // Convert to Map<string, number>
+        const stats = {};
+        result.rows.forEach(row => {
+            stats[row.category] = parseInt(row.count);
+        });
+
+        return stats;
     }
 }
-
 export default MemoryModel;

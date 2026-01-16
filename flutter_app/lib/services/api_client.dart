@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart'; // For debugPrint
 import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
 import '../config/config.dart';
 
 /// API Response wrapper
@@ -39,21 +42,39 @@ class ApiResponse<T> {
   }
 }
 
-/// HTTP API Client for Memory OS Backend
+/// HTTP API Client for Kairo Backend
+/// Automatically includes Firebase Auth token in requests
 class ApiClient {
   final String baseUrl;
   final http.Client _client;
 
-  ApiClient({
-    String? baseUrl,
-    http.Client? client,
-  })  : baseUrl = baseUrl ?? Config.apiBaseUrl,
-        _client = client ?? http.Client();
+  ApiClient({String? baseUrl, http.Client? client})
+    : baseUrl = baseUrl ?? Config.apiBaseUrl,
+      _client = client ?? http.Client();
 
-  Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
+  /// Get headers with auth token
+  Future<Map<String, String>> _getHeaders() async {
+    final headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+
+    // Get Firebase token from authenticated user
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final token = await user.getIdToken();
+        if (token != null) {
+          headers['Authorization'] = 'Bearer $token';
+        }
+      } catch (e) {
+        debugPrint('Failed to get auth token: $e');
+        // Continue without auth - backend will use demo user in dev
+      }
+    }
+
+    return headers;
+  }
 
   Uri _buildUri(String path, [Map<String, dynamic>? queryParams]) {
     final uri = Uri.parse('$baseUrl$path');
@@ -65,19 +86,47 @@ class ApiClient {
     return uri;
   }
 
+  void _logRequest(String method, Uri uri, [Object? body]) {
+    debugPrint(
+      '🌐 [API] $method $uri (Timeout: ${Config.apiTimeout.inSeconds}s)',
+    );
+    if (body != null) {
+      debugPrint('   Body: $body');
+    }
+  }
+
+  void _logResponse(String method, Uri uri, http.Response response) {
+    final status = response.statusCode;
+    final emoji = (status >= 200 && status < 300) ? '✅' : '❌';
+    debugPrint('$emoji [API] $status $method $uri');
+    // Always print body for debugging
+    if (response.body.isNotEmpty) {
+      debugPrint('   Body: ${response.body}');
+    }
+  }
+
+  void _logError(String method, Uri uri, dynamic error) {
+    debugPrint('🚨 [API] Error $method $uri: $error');
+  }
+
   Future<ApiResponse<T>> get<T>(
     String path, {
     Map<String, dynamic>? queryParams,
     T Function(dynamic)? fromJson,
   }) async {
+    final uri = _buildUri(path, queryParams);
+    _logRequest('GET', uri);
+
     try {
-      final uri = _buildUri(path, queryParams);
+      final headers = await _getHeaders();
       final response = await _client
-          .get(uri, headers: _headers)
+          .get(uri, headers: headers)
           .timeout(Config.apiTimeout);
 
+      _logResponse('GET', uri, response);
       return _handleResponse(response, fromJson);
     } catch (e) {
+      _logError('GET', uri, e);
       return ApiResponse.error(_getErrorMessage(e));
     }
   }
@@ -87,18 +136,23 @@ class ApiClient {
     Map<String, dynamic>? body,
     T Function(dynamic)? fromJson,
   }) async {
+    final uri = _buildUri(path);
+    _logRequest('POST', uri, body);
+
     try {
-      final uri = _buildUri(path);
+      final headers = await _getHeaders();
       final response = await _client
           .post(
             uri,
-            headers: _headers,
+            headers: headers,
             body: body != null ? jsonEncode(body) : null,
           )
           .timeout(Config.apiTimeout);
 
+      _logResponse('POST', uri, response);
       return _handleResponse(response, fromJson);
     } catch (e) {
+      _logError('POST', uri, e);
       return ApiResponse.error(_getErrorMessage(e));
     }
   }
@@ -108,18 +162,23 @@ class ApiClient {
     Map<String, dynamic>? body,
     T Function(dynamic)? fromJson,
   }) async {
+    final uri = _buildUri(path);
+    _logRequest('PATCH', uri, body);
+
     try {
-      final uri = _buildUri(path);
+      final headers = await _getHeaders();
       final response = await _client
           .patch(
             uri,
-            headers: _headers,
+            headers: headers,
             body: body != null ? jsonEncode(body) : null,
           )
           .timeout(Config.apiTimeout);
 
+      _logResponse('PATCH', uri, response);
       return _handleResponse(response, fromJson);
     } catch (e) {
+      _logError('PATCH', uri, e);
       return ApiResponse.error(_getErrorMessage(e));
     }
   }
@@ -128,14 +187,19 @@ class ApiClient {
     String path, {
     T Function(dynamic)? fromJson,
   }) async {
+    final uri = _buildUri(path);
+    _logRequest('DELETE', uri);
+
     try {
-      final uri = _buildUri(path);
+      final headers = await _getHeaders();
       final response = await _client
-          .delete(uri, headers: _headers)
+          .delete(uri, headers: headers)
           .timeout(Config.apiTimeout);
 
+      _logResponse('DELETE', uri, response);
       return _handleResponse(response, fromJson);
     } catch (e) {
+      _logError('DELETE', uri, e);
       return ApiResponse.error(_getErrorMessage(e));
     }
   }
@@ -147,11 +211,28 @@ class ApiClient {
     Map<String, String>? fields,
     T Function(dynamic)? fromJson,
   }) async {
+    final uri = _buildUri(path);
+    _logRequest('POST(Multipart)', uri, fields);
+
     try {
-      final uri = _buildUri(path);
       final request = http.MultipartRequest('POST', uri);
 
-      request.files.add(await http.MultipartFile.fromPath(fileField, file.path));
+      // Add auth header to multipart request
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        try {
+          final token = await user.getIdToken();
+          if (token != null) {
+            request.headers['Authorization'] = 'Bearer $token';
+          }
+        } catch (e) {
+          // Continue without auth
+        }
+      }
+
+      request.files.add(
+        await http.MultipartFile.fromPath(fileField, file.path),
+      );
       if (fields != null) {
         request.fields.addAll(fields);
       }
@@ -159,8 +240,10 @@ class ApiClient {
       final streamedResponse = await request.send().timeout(Config.apiTimeout);
       final response = await http.Response.fromStream(streamedResponse);
 
+      _logResponse('POST(Multipart)', uri, response);
       return _handleResponse(response, fromJson);
     } catch (e) {
+      _logError('POST(Multipart)', uri, e);
       return ApiResponse.error(_getErrorMessage(e));
     }
   }
@@ -175,6 +258,20 @@ class ApiClient {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return ApiResponse.fromJson(json, fromJson);
       } else {
+        // Handle auth errors specifically
+        if (response.statusCode == 401) {
+          final code = json['code'];
+          if (code == 'TOKEN_EXPIRED') {
+            return ApiResponse(
+              success: false,
+              error: 'Session expired. Please sign in again.',
+            );
+          }
+          return ApiResponse(
+            success: false,
+            error: json['error'] ?? 'Authentication required',
+          );
+        }
         return ApiResponse(
           success: false,
           error: json['error'] ?? json['message'] ?? 'Request failed',
@@ -192,6 +289,9 @@ class ApiClient {
       return 'Network error: ${error.message}';
     } else if (error is FormatException) {
       return 'Invalid response format';
+    } else if (error is TimeoutException) {
+      // Explicitly handle timeout
+      return 'Network error: Connection timed out';
     } else {
       return error.toString();
     }

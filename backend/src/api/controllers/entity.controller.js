@@ -11,7 +11,7 @@ class EntityController {
      */
     async getEntities(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
             const { entity_type, category, search, sortBy, sortOrder, limit, offset } = request.query;
 
             const entities = await entityService.getUserEntities(userId, {
@@ -43,7 +43,7 @@ class EntityController {
      */
     async getEntity(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
             const { id } = request.params;
 
             const entity = await entityService.getEntityById(userId, id);
@@ -66,7 +66,7 @@ class EntityController {
      */
     async searchEntities(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
             const { q, entity_type } = request.query;
 
             if (!q) {
@@ -98,7 +98,7 @@ class EntityController {
      */
     async getStats(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
             const stats = await entityService.getEntityStats(userId);
 
@@ -120,7 +120,7 @@ class EntityController {
      */
     async getTopEntities(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
             const { limit, entity_type } = request.query;
 
             const entities = await entityService.getTopEntities(
@@ -148,7 +148,7 @@ class EntityController {
      */
     async updateEntity(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
             const { id } = request.params;
 
             const entity = await entityService.updateEntity(userId, id, request.body);
@@ -171,7 +171,7 @@ class EntityController {
      */
     async deleteEntity(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
             const { id } = request.params;
 
             const entity = await entityService.deleteEntity(userId, id);
@@ -195,7 +195,7 @@ class EntityController {
      */
     async extractFromMemories(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
             const { limit } = request.body;
 
             const result = await entityExtractionService.extractFromMemories(
@@ -221,7 +221,7 @@ class EntityController {
      */
     async getRecentEntities(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
             const { days, limit } = request.query;
 
             const entities = await entityService.getRecentEntities(

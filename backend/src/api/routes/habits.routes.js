@@ -1,12 +1,13 @@
 import habitService from '../../services/habits/habitService.js';
+import auth from '../../middleware/auth.js';
 
 export default async function habitRoutes(fastify, options) {
     /**
      * Create a new habit
      */
-    fastify.post('/habits', async (request, reply) => {
+    fastify.post('/habits', { preHandler: auth.authenticate }, async (request, reply) => {
         try {
-            const userId = '00000000-0000-0000-0000-000000000000'; // TODO: Get from auth
+            const userId = request.userId;
             const habit = await habitService.createHabit(userId, request.body);
 
             return {
@@ -25,12 +26,14 @@ export default async function habitRoutes(fastify, options) {
     /**
      * Get user's habits
      */
-    fastify.get('/habits', async (request, reply) => {
+    fastify.get('/habits', { preHandler: auth.authenticate }, async (request, reply) => {
         try {
-            const userId = '00000000-0000-0000-0000-000000000000'; // TODO: Get from auth
+            const userId = request.userId;
             const { status = 'active' } = request.query;
 
+            console.log(`[GET /habits] User: ${userId}, Status: ${status}`);
             const habits = await habitService.getUserHabits(userId, status);
+            console.log(`[GET /habits] Found: ${habits.length}`);
 
             return {
                 success: true,
@@ -49,7 +52,7 @@ export default async function habitRoutes(fastify, options) {
     /**
      * Get habit progress
      */
-    fastify.get('/habits/:habitId/progress', async (request, reply) => {
+    fastify.get('/habits/:habitId/progress', { preHandler: auth.authenticate }, async (request, reply) => {
         try {
             const { habitId } = request.params;
             const progress = await habitService.getHabitProgress(habitId);
@@ -70,7 +73,7 @@ export default async function habitRoutes(fastify, options) {
     /**
      * Update habit
      */
-    fastify.patch('/habits/:habitId', async (request, reply) => {
+    fastify.patch('/habits/:habitId', { preHandler: auth.authenticate }, async (request, reply) => {
         try {
             const { habitId } = request.params;
             const habit = await habitService.updateHabit(habitId, request.body);
@@ -91,7 +94,7 @@ export default async function habitRoutes(fastify, options) {
     /**
      * Delete habit
      */
-    fastify.delete('/habits/:habitId', async (request, reply) => {
+    fastify.delete('/habits/:habitId', { preHandler: auth.authenticate }, async (request, reply) => {
         try {
             const { habitId } = request.params;
             await habitService.deleteHabit(habitId);
@@ -112,9 +115,9 @@ export default async function habitRoutes(fastify, options) {
     /**
      * Log habit completion
      */
-    fastify.post('/habits/:habitId/complete', async (request, reply) => {
+    fastify.post('/habits/:habitId/complete', { preHandler: auth.authenticate }, async (request, reply) => {
         try {
-            const userId = '00000000-0000-0000-0000-000000000000'; // TODO: Get from auth
+            const userId = request.userId;
             const { habitId } = request.params;
             const { completed = true, notes } = request.body;
 
@@ -137,9 +140,9 @@ export default async function habitRoutes(fastify, options) {
     /**
      * Get habit suggestions
      */
-    fastify.get('/habits/suggestions', async (request, reply) => {
+    fastify.get('/habits/suggestions', { preHandler: auth.authenticate }, async (request, reply) => {
         try {
-            const userId = '00000000-0000-0000-0000-000000000000'; // TODO: Get from auth
+            const userId = request.userId;
             const suggestions = await habitService.suggestHabits(userId);
 
             return {

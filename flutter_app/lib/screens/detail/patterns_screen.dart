@@ -364,15 +364,15 @@ class _PatternCard extends StatelessWidget {
               _ConfidenceBadge(confidence: pattern.confidence),
             ],
           ),
-          if (pattern.description != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              pattern.description!,
-              style: AppTypography.body.copyWith(
-                color: AppColors.textSecondary,
-              ),
+          ...[
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            pattern.description!,
+            style: AppTypography.body.copyWith(
+              color: AppColors.textSecondary,
             ),
-          ],
+          ),
+        ],
           if (pattern.trend != null) ...[
             const SizedBox(height: AppSpacing.md),
             _TrendIndicator(trend: pattern.trend!),
@@ -452,13 +452,12 @@ class _InsightCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (insight.category != null)
-                  CategoryChip.fromCategory(
-                    appCategory: AppCategory.values.firstWhere(
-                      (c) => c.name == insight.category,
-                      orElse: () => AppCategory.generic,
-                    ),
+                CategoryChip.fromCategory(
+                  appCategory: AppCategory.values.firstWhere(
+                    (c) => c.name == insight.category,
+                    orElse: () => AppCategory.generic,
                   ),
+                ),
               ],
             ),
           ),

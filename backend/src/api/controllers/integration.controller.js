@@ -1,4 +1,4 @@
-import integrationService from '../../../services/messaging/integrationService.js';
+import integrationService from '../../services/messaging/integrationService.js';
 
 /**
  * Integration Controller
@@ -11,7 +11,7 @@ class IntegrationController {
      */
     async getUserIntegrations(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
 
             const integrations = await integrationService.getUserIntegrations(userId);
 
@@ -49,7 +49,7 @@ class IntegrationController {
      */
     async activateIntegration(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
             const { activation_code } = request.body;
 
             if (!activation_code) {
@@ -151,7 +151,7 @@ class IntegrationController {
      */
     async deactivateIntegration(request, reply) {
         try {
-            const userId = request.userId || '00000000-0000-0000-0000-000000000000';
+            const userId = request.userId;
             const { id } = request.params;
 
             await integrationService.deactivateIntegration(id, userId);

@@ -13,7 +13,9 @@ class InsightsService {
             const response = await fetch(`${analyticsUrl}/api/v1/patterns/${userId}`);
 
             if (!response.ok) {
-                throw new Error(`Analytics service error: ${response.statusText}`);
+                const errorText = await response.text();
+                console.error('Analytics Error Body:', errorText);
+                throw new Error(`Analytics service error: ${response.statusText} - ${errorText}`);
             }
 
             const data = await response.json();
@@ -147,6 +149,54 @@ Now generate for the given pattern. Return ONLY the insight text, nothing else.
      */
     async refreshInsights(userId) {
         return this.getUserInsights(userId, true);
+    }
+
+    /**
+     * Get patterns for user (raw pattern data)
+     */
+    async getPatterns(userId) {
+        // Get patterns from database
+        const patterns = await PatternModel.findByUser(userId);
+
+        // If no patterns, try to fetch from analytics
+        if (patterns.length === 0) {
+            const analyticsPatterns = await this.fetchPatternsFromAnalytics(userId);
+
+            const allPatterns = [
+                ...(analyticsPatterns.frequency_patterns || []).map(p => ({
+                    id: `freq_${p.activity}_${p.category}`,
+                    pattern_type: p.pattern_type,
+                    category: p.category,
+                    description: p.description,
+                    confidence_score: p.confidence,
+                    frequency: p.frequency_per_week ? `${p.frequency_per_week}x per week` : null,
+                    trend: null
+                })),
+                ...(analyticsPatterns.time_patterns || []).map(p => ({
+                    id: `time_${p.activity}_${p.category}`,
+                    pattern_type: p.pattern_type,
+                    category: p.category,
+                    description: p.description,
+                    confidence_score: p.confidence,
+                    frequency: null,
+                    trend: `Peak at ${p.peak_hour}:00`
+                }))
+            ];
+
+            return allPatterns;
+        }
+
+        return patterns.map(p => ({
+            id: p.id,
+            pattern_type: p.pattern_type,
+            category: p.category,
+            description: p.description,
+            confidence_score: parseFloat(p.confidence_score),
+            frequency: null,
+            trend: null,
+            created_at: p.created_at,
+            last_validated_at: p.last_validated_at
+        }));
     }
 }
 

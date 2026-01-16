@@ -28,10 +28,7 @@ class ProfileScreen extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
 
               // Header
-              Text(
-                'Profile',
-                style: AppTypography.h1,
-              ),
+              Text('Profile', style: AppTypography.h1),
 
               const SizedBox(height: AppSpacing.xl),
 
@@ -101,10 +98,7 @@ class ProfileScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'User',
-                  style: AppTypography.h3,
-                ),
+                Text('User', style: AppTypography.h3),
                 const SizedBox(height: AppSpacing.xxs),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -182,12 +176,16 @@ class ProfileScreen extends StatelessWidget {
                       progress: 1 - quota.usagePercent,
                       size: 48,
                       strokeWidth: 4,
-                      progressColor: quota.hasQuota ? AppColors.primary : AppColors.error,
+                      progressColor: quota.hasQuota
+                          ? AppColors.primary
+                          : AppColors.error,
                       showPercentage: false,
                       child: Text(
                         '${quota.remaining}',
                         style: AppTypography.label.copyWith(
-                          color: quota.hasQuota ? AppColors.primary : AppColors.error,
+                          color: quota.hasQuota
+                              ? AppColors.primary
+                              : AppColors.error,
                         ),
                       ),
                     ),
@@ -211,10 +209,7 @@ class ProfileScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      '${quota.used} used',
-                      style: AppTypography.caption,
-                    ),
+                    Text('${quota.used} used', style: AppTypography.caption),
                     Text(
                       '${quota.limit} limit (${quota.tier})',
                       style: AppTypography.caption,
@@ -225,9 +220,7 @@ class ProfileScreen extends StatelessWidget {
 
               if (quota == null) ...[
                 const SizedBox(height: AppSpacing.md),
-                const Center(
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+                const Center(child: CircularProgressIndicator(strokeWidth: 2)),
               ],
             ],
           ),
@@ -257,7 +250,9 @@ class ProfileScreen extends StatelessWidget {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const AchievementsScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const AchievementsScreen(),
+                    ),
                   );
                 },
               ),
@@ -344,7 +339,7 @@ class ProfileScreen extends StatelessWidget {
                   onChanged: (value) {
                     // TODO: Toggle haptic
                   },
-                  activeColor: AppColors.primary,
+                  activeThumbColor: AppColors.primary,
                 ),
               ),
               const Divider(height: 1, indent: 56),
@@ -388,7 +383,9 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.radiusFull,
+                      ),
                     ),
                     child: Text(
                       'PRO',
@@ -398,10 +395,7 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    'Upgrade for more',
-                    style: AppTypography.widgetTitle,
-                  ),
+                  Text('Upgrade for more', style: AppTypography.widgetTitle),
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
@@ -437,12 +431,7 @@ class ProfileScreen extends StatelessWidget {
             size: 18,
           ),
           const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              text,
-              style: AppTypography.body,
-            ),
-          ),
+          Expanded(child: Text(text, style: AppTypography.body)),
         ],
       ),
     );
@@ -537,25 +526,15 @@ class _SettingsRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: AppColors.textSecondary,
-              size: 24,
-            ),
+            Icon(icon, color: AppColors.textSecondary, size: 24),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: AppTypography.body,
-                  ),
+                  Text(title, style: AppTypography.body),
                   if (subtitle != null)
-                    Text(
-                      subtitle!,
-                      style: AppTypography.caption,
-                    ),
+                    Text(subtitle!, style: AppTypography.caption),
                 ],
               ),
             ),

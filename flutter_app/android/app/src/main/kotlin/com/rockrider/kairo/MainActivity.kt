@@ -1,4 +1,4 @@
-package com.memoryos.flutter_app
+package com.rockrider.kairo
 
 import io.flutter.embedding.android.FlutterActivity
 

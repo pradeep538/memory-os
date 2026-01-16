@@ -6,8 +6,10 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import config from './config/index.js';
 import db from './db/index.js';
+import { authenticate, optionalAuth } from './middleware/auth.js';
 
 // Routes
+import configRoutes from './api/routes/config.routes.js';
 import memoryRoutes from './api/routes/memory.routes.js';
 import inputRoutes from './api/routes/input.routes.js';
 import insightsRoutes from './api/routes/insights.routes.js';
@@ -21,6 +23,7 @@ import entityRoutes from './api/routes/entities.routes.js';
 import engagementRoutes from './api/routes/engagement.routes.js';
 import correlationRoutes from './api/routes/correlations.routes.js';
 import messagingRoutes from './api/routes/messaging.routes.js';
+import routinesRoutes from './api/routes/routines.routes.js';
 
 console.log('🚀 Starting Memory OS backend...');
 
@@ -100,6 +103,21 @@ fastify.get('/api/v1', async (request, reply) => {
     };
 });
 
+// Add authentication hook to all /api/v1 routes
+fastify.addHook('preHandler', async (request, reply) => {
+    // Skip auth for health check and public endpoints
+    if (request.url === '/health' ||
+        request.url === '/api/v1' ||
+        request.url.startsWith('/docs') ||
+        request.url.startsWith('/webhooks')) {
+        return;
+    }
+
+    // Apply strict authentication to all API routes
+    // Requires valid Firebase token (dev mode: falls back to demo user)
+    await authenticate(request, reply);
+});
+
 // Register routes
 await fastify.register(memoryRoutes, { prefix: '/api/v1/memory' });
 await fastify.register(inputRoutes, { prefix: '/api/v1/input' });
@@ -111,9 +129,11 @@ await fastify.register(habitRoutes, { prefix: '/api/v1' });
 await fastify.register(planRoutes, { prefix: '/api/v1' });
 await fastify.register(scenarioRoutes, { prefix: '/api/v1' });
 await fastify.register(entityRoutes, { prefix: '/api/v1' });
-await fastify.register(engagementRoutes, { prefix: '/api/v1' });
 await fastify.register(correlationRoutes, { prefix: '/api/v1' });
 await fastify.register(messagingRoutes, { prefix: '/api/v1' });
+await fastify.register(engagementRoutes, { prefix: '/api/v1/engagement' });
+await fastify.register(configRoutes, { prefix: '/api/v1/config' });
+await fastify.register(routinesRoutes, { prefix: '/api/v1/routines' });
 
 // Error handler
 fastify.setErrorHandler((error, request, reply) => {
@@ -128,10 +148,32 @@ fastify.setErrorHandler((error, request, reply) => {
 // Start server
 const start = async () => {
     try {
-        await fastify.listen({
-            port: config.port,
-            host: config.host
-        });
+        // Start Queue Client (for producing jobs)
+        const queue = (await import('./lib/queue.js')).default;
+        await queue.start();
+        console.log('🐘 Queue client ready');
+
+        // Start Background Worker (in same process for dev/simplicity)
+        const { startWorker } = await import('./worker.js');
+        await startWorker();
+        console.log('👷 Background Worker attached');
+
+        // Start Fastify server
+        try {
+            await fastify.listen({
+                port: config.port,
+                host: config.host
+            });
+        } catch (listenError) {
+            if (listenError.code === 'EADDRINUSE') {
+                console.error(`❌ Port ${config.port} is already in use!`);
+                console.error(`   Try: lsof -i :${config.port} -t | xargs kill -9`);
+            } else {
+                console.error('❌ Failed to start server:', listenError.message);
+                console.error(listenError.stack);
+            }
+            throw listenError;
+        }
 
 
         console.log(`
@@ -145,9 +187,19 @@ API:         http://localhost:${config.port}/api/v1
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     `);
 
-        // Start scheduled jobs
-        const schedulerService = (await import('./services/notifications/schedulerService.js')).default;
-        schedulerService.startAll();
+        // Start scheduled jobs (with error handling to prevent crash)
+        try {
+            const schedulerService = (await import('./services/notifications/schedulerService.js')).default;
+            if (schedulerService?.startAll) {
+                schedulerService.startAll();
+            }
+        } catch (err) {
+            console.error('⚠️  Scheduler failed to start:', err.message);
+            if (config.isDev) {
+                console.error(err.stack);
+            }
+            // Continue without scheduler - not critical
+        }
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);
@@ -157,6 +209,16 @@ API:         http://localhost:${config.port}/api/v1
 // Graceful shutdown
 const gracefulShutdown = async (signal) => {
     console.log(`\n${signal} received, closing server...`);
+
+    // Stop Queue
+    try {
+        const queue = (await import('./lib/queue.js')).default;
+        await queue.stop();
+        console.log('🐘 Queue stopped');
+    } catch (err) {
+        console.error('Error stopping queue:', err);
+    }
+
     await fastify.close();
     process.exit(0);
 };
@@ -164,6 +226,8 @@ const gracefulShutdown = async (signal) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-start();
+if (process.env.NODE_ENV !== 'test') {
+    start();
+}
 
 export default fastify;

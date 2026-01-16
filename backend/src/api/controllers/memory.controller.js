@@ -9,8 +9,8 @@ class MemoryController {
         try {
             const { rawInput, source, eventType, category, normalizedData, confidenceScore } = request.body;
 
-            // TODO: Get userId from auth
-            const userId = '00000000-0000-0000-0000-000000000000'; // Demo user for now
+            
+            const userId = request.userId;
 
             const memory = await memoryService.createMemory(userId, {
                 rawInput,
@@ -43,8 +43,8 @@ class MemoryController {
         try {
             const { category, eventType, startDate, endDate, limit, offset } = request.query;
 
-            // TODO: Get userId from auth
-            const userId = '00000000-0000-0000-0000-000000000000';
+            
+            const userId = request.userId;
 
             const memories = await memoryService.getUserMemories(userId, {
                 category,
@@ -77,8 +77,8 @@ class MemoryController {
         try {
             const { id } = request.params;
 
-            // TODO: Get userId from auth
-            const userId = '00000000-0000-0000-0000-000000000000';
+            
+            const userId = request.userId;
 
             const memory = await memoryService.getMemory(id, userId);
 
@@ -111,8 +111,8 @@ class MemoryController {
             const { id } = request.params;
             const correctedData = request.body;
 
-            // TODO: Get userId from auth
-            const userId = '00000000-0000-0000-0000-000000000000';
+            
+            const userId = request.userId;
 
             const correctedMemory = await memoryService.correctMemory(id, userId, correctedData);
 
@@ -136,8 +136,8 @@ class MemoryController {
      */
     async categoryStats(request, reply) {
         try {
-            // TODO: Get userId from auth
-            const userId = '00000000-0000-0000-0000-000000000000';
+            
+            const userId = request.userId;
 
             const stats = await memoryService.getCategoryStats(userId);
 

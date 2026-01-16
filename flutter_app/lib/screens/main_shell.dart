@@ -5,6 +5,7 @@ import '../config/app_spacing.dart';
 import 'feed_screen.dart';
 import 'input_modal_screen.dart';
 import 'profile_screen.dart';
+import '../widgets/input/mic_fab.dart';
 
 /// Main shell with bottom navigation
 class MainShell extends StatefulWidget {
@@ -45,9 +46,10 @@ class _MainShellState extends State<MainShell> {
           const end = Offset.zero;
           const curve = Curves.easeOutCubic;
 
-          var tween = Tween(begin: begin, end: end).chain(
-            CurveTween(curve: curve),
-          );
+          var tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: curve));
 
           return SlideTransition(
             position: animation.drive(tween),
@@ -97,10 +99,8 @@ class _MainShellState extends State<MainShell> {
                 onTap: () => _onTabTapped(0),
               ),
 
-              // Input button (center)
-              _InputNavButton(
-                onTap: () => _onTabTapped(1),
-              ),
+              // Mic Hold-to-Talk button (center)
+              const MicFab(),
 
               // Profile tab
               _NavItem(
@@ -153,39 +153,6 @@ class _NavItem extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _InputNavButton extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _InputNavButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          gradient: AppColors.primaryGradient,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withOpacity(0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: const Icon(
-          Icons.add_rounded,
-          color: AppColors.textOnPrimary,
-          size: 28,
         ),
       ),
     );

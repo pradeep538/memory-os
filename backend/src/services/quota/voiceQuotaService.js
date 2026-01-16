@@ -51,7 +51,7 @@ class VoiceQuotaService {
 
         const result = await db.query(`
             SELECT COUNT(*) as count
-            FROM memories
+            FROM memory_units
             WHERE user_id = $1
                 AND source = 'voice'
                 AND created_at >= $2

@@ -1,65 +1,39 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:record/record.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../config/app_colors.dart';
 import '../../config/app_typography.dart';
 import '../../config/app_spacing.dart';
 import '../../providers/input_provider.dart';
 import 'marquee_examples.dart';
 
-/// Voice/Text input bar - the primary input mechanism
+/// Text-only input bar (Voice is handled by MicFab)
+/// Becomes a waveform visualizer during recording
 class VoiceInputBar extends StatefulWidget {
   final VoidCallback? onExpandToFullscreen;
 
-  const VoiceInputBar({
-    super.key,
-    this.onExpandToFullscreen,
-  });
+  const VoiceInputBar({super.key, this.onExpandToFullscreen});
 
   @override
   State<VoiceInputBar> createState() => _VoiceInputBarState();
 }
 
-class _VoiceInputBarState extends State<VoiceInputBar>
-    with SingleTickerProviderStateMixin {
+class _VoiceInputBarState extends State<VoiceInputBar> {
   final _textController = TextEditingController();
   final _focusNode = FocusNode();
-  final _audioRecorder = AudioRecorder();
-
-  bool _isRecording = false;
   bool _hasText = false;
-  int _recordingSeconds = 0;
-  Timer? _recordingTimer;
-  String? _recordingPath;
-
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
     _textController.addListener(_onTextChanged);
-
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
-      vsync: this,
-    );
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
   }
 
   @override
   void dispose() {
     _textController.dispose();
     _focusNode.dispose();
-    _recordingTimer?.cancel();
-    _audioRecorder.dispose();
-    _pulseController.dispose();
     super.dispose();
   }
 
@@ -67,105 +41,6 @@ class _VoiceInputBarState extends State<VoiceInputBar>
     final hasText = _textController.text.trim().isNotEmpty;
     if (hasText != _hasText) {
       setState(() => _hasText = hasText);
-    }
-  }
-
-  Future<void> _startRecording() async {
-    // Check permission
-    if (!await _audioRecorder.hasPermission()) {
-      return;
-    }
-
-    final inputProvider = context.read<InputProvider>();
-    final maxDuration = inputProvider.maxRecordingDuration;
-
-    // Get temp directory for recording
-    final tempDir = await getTemporaryDirectory();
-    _recordingPath = '${tempDir.path}/voice_input_${DateTime.now().millisecondsSinceEpoch}.m4a';
-
-    // Start recording
-    await _audioRecorder.start(
-      const RecordConfig(
-        encoder: AudioEncoder.aacLc,
-        bitRate: 128000,
-        sampleRate: 44100,
-      ),
-      path: _recordingPath!,
-    );
-
-    // Haptic feedback
-    HapticFeedback.mediumImpact();
-
-    setState(() {
-      _isRecording = true;
-      _recordingSeconds = 0;
-    });
-
-    inputProvider.startRecording();
-    _pulseController.repeat(reverse: true);
-
-    // Start timer
-    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        _recordingSeconds++;
-      });
-      inputProvider.updateRecordingDuration(_recordingSeconds);
-
-      // Auto-stop at max duration
-      if (_recordingSeconds >= maxDuration) {
-        _stopRecording();
-      }
-    });
-  }
-
-  Future<void> _stopRecording() async {
-    _recordingTimer?.cancel();
-    _pulseController.stop();
-    _pulseController.reset();
-
-    final path = await _audioRecorder.stop();
-    HapticFeedback.lightImpact();
-
-    setState(() {
-      _isRecording = false;
-    });
-
-    if (path != null && _recordingSeconds > 0) {
-      final inputProvider = context.read<InputProvider>();
-      inputProvider.stopRecording();
-
-      // Process the audio
-      final file = File(path);
-      await inputProvider.processAudio(file);
-
-      // Clean up temp file
-      try {
-        await file.delete();
-      } catch (_) {}
-    } else {
-      context.read<InputProvider>().cancelRecording();
-    }
-  }
-
-  void _cancelRecording() async {
-    _recordingTimer?.cancel();
-    _pulseController.stop();
-    _pulseController.reset();
-    await _audioRecorder.stop();
-    HapticFeedback.lightImpact();
-
-    setState(() {
-      _isRecording = false;
-      _recordingSeconds = 0;
-    });
-
-    context.read<InputProvider>().cancelRecording();
-
-    // Clean up temp file
-    if (_recordingPath != null) {
-      try {
-        await File(_recordingPath!).delete();
-      } catch (_) {}
     }
   }
 
@@ -191,40 +66,103 @@ class _VoiceInputBarState extends State<VoiceInputBar>
     return Consumer<InputProvider>(
       builder: (context, inputProvider, _) {
         final state = inputProvider.state;
-        final isProcessing = state == InputState.transcribing ||
+        final isProcessing =
+            state == InputState.transcribing ||
             state == InputState.enhancing ||
-            state == InputState.processing;
+            state == InputState.processing ||
+            state == InputState.confirming;
+        final isRecording = state == InputState.recording;
 
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Marquee examples (above input bar)
-            if (!_isRecording && !_hasText && !isProcessing)
+            // Marquee examples (above input bar), show only when idle
+            if (!_hasText &&
+                !isProcessing &&
+                !isRecording &&
+                state == InputState.idle)
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                 child: MarqueeExamples(onExampleTap: _onExampleTap),
               ),
 
-            // Main input bar
-            Container(
+            // Main input bar container
+            if (isRecording)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.fiber_manual_record,
+                        color: Colors.red,
+                        size: 12,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${inputProvider.maxRecordingDuration - inputProvider.recordingDuration}s',
+                        style: AppTypography.label.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            // Main input bar container
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.sm,
                 vertical: AppSpacing.sm,
               ),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: isRecording
+                    ? AppColors.primary.withOpacity(0.05)
+                    : AppColors.surface,
                 borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.textPrimary.withOpacity(0.08),
+                    color: isRecording
+                        ? AppColors.primary.withOpacity(0.1)
+                        : AppColors.textPrimary.withOpacity(0.08),
                     blurRadius: 16,
                     offset: const Offset(0, -4),
                   ),
                 ],
+                border: isRecording
+                    ? Border.all(color: AppColors.primary.withOpacity(0.3))
+                    : null,
               ),
-              child: _isRecording
-                  ? _buildRecordingState(inputProvider)
-                  : _buildDefaultState(isProcessing),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: isRecording
+                    ? _buildRecordingState(context, inputProvider)
+                    : _buildTextState(
+                        isProcessing,
+                        state,
+                        inputProvider.activeSource,
+                      ),
+              ),
             ),
           ],
         );
@@ -232,16 +170,14 @@ class _VoiceInputBarState extends State<VoiceInputBar>
     );
   }
 
-  Widget _buildDefaultState(bool isProcessing) {
+  Widget _buildTextState(
+    bool isProcessing,
+    InputState state,
+    InputSource? activeSource,
+  ) {
     return Row(
+      key: const ValueKey('text_state'),
       children: [
-        // Mic button
-        _MicButton(
-          isProcessing: isProcessing,
-          onPressed: _startRecording,
-          onLongPressStart: _startRecording,
-          onLongPressEnd: _stopRecording,
-        ),
         const SizedBox(width: AppSpacing.sm),
 
         // Text input
@@ -269,152 +205,159 @@ class _VoiceInputBarState extends State<VoiceInputBar>
         // Submit button
         _SubmitButton(
           hasText: _hasText,
-          isProcessing: isProcessing,
+          state: state,
+          activeSource: activeSource,
           onPressed: _submitText,
         ),
       ],
     );
   }
 
-  Widget _buildRecordingState(InputProvider inputProvider) {
-    final maxDuration = inputProvider.maxRecordingDuration;
-    final progress = _recordingSeconds / maxDuration;
-
+  Widget _buildRecordingState(BuildContext context, InputProvider provider) {
     return Row(
+      key: const ValueKey('recording_state'),
       children: [
-        // Recording indicator
-        ScaleTransition(
-          scale: _pulseAnimation,
-          child: Container(
-            width: 12,
-            height: 12,
-            decoration: const BoxDecoration(
-              color: AppColors.recording,
-              shape: BoxShape.circle,
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-
-        // REC label
-        Text(
-          'REC',
-          style: AppTypography.label.copyWith(color: AppColors.recording),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-
-        // Timer
-        Text(
-          '${_recordingSeconds}s',
-          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
-        ),
         const SizedBox(width: AppSpacing.md),
 
-        // Progress bar
+        // Recording Label with Icon
+        Icon(Icons.graphic_eq_rounded, color: AppColors.primary, size: 20),
+        const SizedBox(width: AppSpacing.sm),
+        Text(
+          'Listening...',
+          style: AppTypography.label.copyWith(color: AppColors.primary),
+        ),
+
+        const SizedBox(width: AppSpacing.md),
+
+        // Waveform Graph
         Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: AppColors.recordingLight,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.recording),
-              minHeight: 6,
-            ),
+          child: SizedBox(
+            height: 30,
+            child: WaveformWidget(amplitudeStream: provider.amplitudeStream),
           ),
         ),
-        const SizedBox(width: AppSpacing.sm),
 
-        // Max duration
-        Text(
-          '${maxDuration}s',
-          style: AppTypography.caption,
-        ),
         const SizedBox(width: AppSpacing.md),
-
-        // Cancel button
-        IconButton(
-          onPressed: _cancelRecording,
-          icon: const Icon(Icons.close_rounded),
-          iconSize: 24,
-          color: AppColors.textSecondary,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-        ),
-
-        // Send button
-        IconButton(
-          onPressed: _stopRecording,
-          icon: const Icon(Icons.check_rounded),
-          iconSize: 24,
-          color: AppColors.primary,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-        ),
       ],
     );
   }
 }
 
-/// Mic button with tap and long-press support
-class _MicButton extends StatelessWidget {
-  final bool isProcessing;
-  final VoidCallback onPressed;
-  final VoidCallback onLongPressStart;
-  final VoidCallback onLongPressEnd;
+/// Simple waveform visualizer
+class WaveformWidget extends StatefulWidget {
+  final Stream<double> amplitudeStream;
 
-  const _MicButton({
-    required this.isProcessing,
-    required this.onPressed,
-    required this.onLongPressStart,
-    required this.onLongPressEnd,
-  });
+  const WaveformWidget({super.key, required this.amplitudeStream});
+
+  @override
+  State<WaveformWidget> createState() => _WaveformWidgetState();
+}
+
+class _WaveformWidgetState extends State<WaveformWidget> {
+  final List<double> _history = List.filled(30, 0.0);
+  StreamSubscription? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = widget.amplitudeStream.listen((amp) {
+      if (mounted) {
+        setState(() {
+          // Normalize amplitude roughly between 0 and 1 (assuming dbFS kind of input, but record gives db?)
+          // record package `getAmplitude()` returns `current` in dBFS (typically -160 to 0).
+          // We need to map -60dB (silence) to 0, and -0dB (loud) to 1.
+
+          double normalized = (amp + 60) / 60;
+          if (normalized < 0) normalized = 0;
+          if (normalized > 1) normalized = 1;
+
+          _history.removeAt(0);
+          _history.add(normalized);
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: isProcessing ? null : onPressed,
-      onLongPressStart: isProcessing ? null : (_) => onLongPressStart(),
-      onLongPressEnd: isProcessing ? null : (_) => onLongPressEnd(),
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: isProcessing ? AppColors.borderLight : AppColors.primary,
-          shape: BoxShape.circle,
-        ),
-        child: isProcessing
-            ? const Padding(
-                padding: EdgeInsets.all(12),
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                ),
-              )
-            : const Icon(
-                Icons.mic_rounded,
-                color: AppColors.textOnPrimary,
-                size: 24,
-              ),
-      ),
+    return CustomPaint(
+      painter: WaveformPainter(data: _history, color: AppColors.primary),
+      size: Size.infinite,
     );
   }
 }
 
-/// Submit button
+class WaveformPainter extends CustomPainter {
+  final List<double> data;
+  final Color color;
+
+  WaveformPainter({required this.data, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+
+    final stepX = size.width / (data.length - 1);
+    final midY = size.height / 2;
+
+    for (int i = 0; i < data.length; i++) {
+      final val = data[i]; // 0 to 1
+      final height = val * size.height * 0.8; // utilize 80% height
+
+      // Draw centered vertical line
+      final x = i * stepX;
+      final top = midY - (height / 2);
+      final bottom = midY + (height / 2);
+
+      // Min height for visibility
+      final actualTop = (bottom - top < 2) ? midY - 1 : top;
+      final actualBottom = (bottom - top < 2) ? midY + 1 : bottom;
+
+      canvas.drawLine(Offset(x, actualTop), Offset(x, actualBottom), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant WaveformPainter oldDelegate) {
+    return true;
+  }
+}
+
+/// Submit button with state feedback
 class _SubmitButton extends StatelessWidget {
   final bool hasText;
-  final bool isProcessing;
+  final InputState state;
+  final InputSource? activeSource; // Add source
   final VoidCallback onPressed;
 
   const _SubmitButton({
     required this.hasText,
-    required this.isProcessing,
+    required this.state,
+    this.activeSource,
     required this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isEnabled = hasText && !isProcessing;
+    final isTextActive = activeSource == InputSource.text;
+    final isProcessing =
+        isTextActive &&
+        (state == InputState.processing ||
+            state == InputState.transcribing ||
+            state == InputState.enhancing ||
+            state == InputState.confirming);
+
+    // Only enable if has text and NOT processing/recording
+    final isEnabled = hasText && !isProcessing && state != InputState.recording;
 
     return GestureDetector(
       onTap: isEnabled ? onPressed : null,
@@ -423,15 +366,53 @@ class _SubmitButton extends StatelessWidget {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: isEnabled ? AppColors.primary : AppColors.borderLight,
+          color: (isTextActive && state == InputState.success)
+              ? AppColors.success
+              : (isTextActive && state == InputState.error)
+              ? AppColors.error
+              : isEnabled
+              ? AppColors.primary
+              : AppColors.borderLight,
           shape: BoxShape.circle,
         ),
-        child: Icon(
-          Icons.arrow_upward_rounded,
-          color: isEnabled ? AppColors.textOnPrimary : AppColors.textDisabled,
-          size: 22,
-        ),
+        child: _buildIcon(isTextActive),
       ),
+    );
+  }
+
+  Widget _buildIcon(bool isTextActive) {
+    if (isTextActive &&
+        (state == InputState.processing ||
+            state == InputState.transcribing ||
+            state == InputState.enhancing ||
+            state == InputState.confirming)) {
+      return const Padding(
+        padding: EdgeInsets.all(10),
+        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+      );
+    }
+
+    if (isTextActive && state == InputState.success) {
+      return const Icon(Icons.check_rounded, color: Colors.white, size: 20);
+    }
+
+    if (isTextActive && state == InputState.error) {
+      return const Icon(
+        Icons.error_outline_rounded,
+        color: Colors.white,
+        size: 20,
+      );
+    }
+
+    return Icon(
+      Icons.arrow_upward_rounded,
+      color:
+          state ==
+              InputState
+                  .recording // Dimmed during recording
+          ? AppColors.textDisabled
+          : const Color(0xFFFFFFFF),
+      size: 22,
     );
   }
 }
