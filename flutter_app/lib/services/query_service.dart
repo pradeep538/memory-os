@@ -8,7 +8,7 @@ class QueryService {
   QueryService(this._client);
 
   /// Ask a question about user's data
-  Future<ApiResponse<QueryResult>> askQuestion(String question) async {
+  Future<ApiResponse<QueryResult>> ask(String question) async {
     return _client.post<QueryResult>(
       '/query',
       body: {'question': question},

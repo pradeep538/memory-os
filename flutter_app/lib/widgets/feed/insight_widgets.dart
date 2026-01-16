@@ -167,9 +167,10 @@ class GapWarningWidget extends StatelessWidget {
                       notification.title,
                       style: AppTypography.widgetTitle,
                     ),
-                    if (notification.teaser != null)
+                    if (notification.teaser != null ||
+                        notification.fullContent != null)
                       Text(
-                        notification.teaser!,
+                        notification.teaser ?? notification.fullContent!,
                         style: AppTypography.caption,
                       ),
                   ],
@@ -182,11 +183,11 @@ class GapWarningWidget extends StatelessWidget {
                   iconSize: 20,
                   color: AppColors.textTertiary,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
             ],
           ),
-
           if (onQuickLog != null) ...[
             const SizedBox(height: AppSpacing.md),
             SizedBox(
@@ -258,18 +259,16 @@ class AIRecommendationWidget extends StatelessWidget {
                   iconSize: 20,
                   color: AppColors.textTertiary,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
             ],
           ),
-
           const SizedBox(height: AppSpacing.md),
-
           Text(
             recommendation,
             style: AppTypography.body,
           ),
-
           if (reasoning != null) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
@@ -279,7 +278,6 @@ class AIRecommendationWidget extends StatelessWidget {
               ),
             ),
           ],
-
           if (onAccept != null) ...[
             const SizedBox(height: AppSpacing.md),
             SizedBox(

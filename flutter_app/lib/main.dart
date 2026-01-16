@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'providers/providers.dart';
-import 'services/services.dart';
-import 'screens/main_shell.dart';
-
 import 'package:firebase_core/firebase_core.dart';
+import 'providers/providers.dart';
+import 'providers/kairo_state.dart'; // Import KairoState
+import 'services/services.dart';
+import 'auth_wrapper.dart';
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark, // Dark icons for light background
+    statusBarBrightness: Brightness.light, // For iOS (light = dark icons)
+  ));
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -23,6 +29,8 @@ class KairoApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AppProvider()),
+        ChangeNotifierProvider(
+            create: (_) => KairoState()), // NEW: Add KairoState
         ChangeNotifierProxyProvider<AppProvider, FeedProvider>(
           create: (_) {
             final apiClient = ApiClient();
@@ -30,7 +38,8 @@ class KairoApp extends StatelessWidget {
               memoryService: MemoryService(apiClient),
               habitsService: HabitsService(apiClient),
               insightsService: InsightsService(apiClient),
-              engagementService: EngagementService(),
+              engagementService: EngagementService(apiClient),
+              analyticsService: AnalyticsService(apiClient),
               notificationsService: NotificationsService(apiClient),
               featureFlagService: FeatureFlagService(apiClient),
             );
@@ -43,7 +52,8 @@ class KairoApp extends StatelessWidget {
                     memoryService: MemoryService(apiClient),
                     habitsService: HabitsService(apiClient),
                     insightsService: InsightsService(apiClient),
-                    engagementService: EngagementService(),
+                    engagementService: EngagementService(apiClient),
+                    analyticsService: AnalyticsService(apiClient),
                     notificationsService: NotificationsService(apiClient),
                     featureFlagService: FeatureFlagService(apiClient),
                   );
@@ -53,6 +63,7 @@ class KairoApp extends StatelessWidget {
               habitsService: appProvider.habitsService,
               insightsService: appProvider.insightsService,
               engagementService: appProvider.engagementService,
+              analyticsService: appProvider.analyticsService,
               notificationsService: appProvider.notificationsService,
               featureFlagService: appProvider.featureFlagService,
             );
@@ -76,7 +87,7 @@ class KairoApp extends StatelessWidget {
           scaffoldBackgroundColor: const Color(0xFF0F172A), // Slate 900
           fontFamily: 'Inter', // Add Inter font for clean look
         ),
-        home: const MainShell(),
+        home: const AuthWrapper(),
       ),
     );
   }

@@ -3,7 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'api_client.dart';
 
 class EngagementService {
-  final ApiClient _api = ApiClient();
+  final ApiClient _api;
+
+  EngagementService([ApiClient? api]) : _api = api ?? ApiClient();
 
   /// Fetch the user's active narrative feed
   Future<List<FeedItem>> getFeed() async {

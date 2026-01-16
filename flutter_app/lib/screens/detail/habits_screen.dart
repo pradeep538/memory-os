@@ -55,8 +55,8 @@ class _HabitsScreenState extends State<HabitsScreen>
     });
 
     final response = await context.read<AppProvider>().habitsService.getHabits(
-      status: _filter,
-    );
+          status: _filter,
+        );
 
     if (mounted) {
       setState(() {
@@ -110,10 +110,10 @@ class _HabitsScreenState extends State<HabitsScreen>
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-          ? _buildErrorState()
-          : _habits.isEmpty
-          ? _buildEmptyState()
-          : _buildHabitsList(),
+              ? _buildErrorState()
+              : _habits.isEmpty
+                  ? _buildEmptyState()
+                  : _buildHabitsList(),
     );
   }
 
@@ -605,9 +605,10 @@ class _HabitFormSheet extends StatefulWidget {
 
 class _HabitFormSheetState extends State<_HabitFormSheet> {
   late TextEditingController _nameController;
+  late TextEditingController _frequencyController;
   late String _selectedCategory;
   late String _habitType;
-  late int _frequency;
+  int _frequency = 1; // Default
   late String _frequencyUnit;
   late bool _isActive;
   bool _isLoading = false;
@@ -626,9 +627,10 @@ class _HabitFormSheetState extends State<_HabitFormSheet> {
     super.initState();
     final h = widget.habit;
     _nameController = TextEditingController(text: h?.habitName ?? '');
+    _frequencyController =
+        TextEditingController(text: '${h?.targetFrequency ?? 1}');
     _selectedCategory = h?.category ?? 'routine';
     _habitType = h?.habitType ?? 'build';
-    _frequency = h?.targetFrequency ?? 1;
     _isActive = (h?.status ?? 'active') == 'active';
     // Map backend units (daily/weekly/monthly) to frontend units (day/week/month) if needed,
     // or assume they match now. Let's normalize:
@@ -647,6 +649,7 @@ class _HabitFormSheetState extends State<_HabitFormSheet> {
   @override
   void dispose() {
     _nameController.dispose();
+    _frequencyController.dispose();
     super.dispose();
   }
 
@@ -790,11 +793,12 @@ class _HabitFormSheetState extends State<_HabitFormSheet> {
                         vertical: AppSpacing.sm,
                       ),
                     ),
-                    controller: TextEditingController(text: '$_frequency'),
+                    controller: _frequencyController,
                     onChanged: (v) {
                       final val = int.tryParse(v);
                       if (val != null && val > 0) {
-                        setState(() => _frequency = val);
+                        _frequency = val;
+                        // No setState needed unless UI depends on _frequency value elsewhere
                       }
                     },
                   ),
@@ -881,9 +885,8 @@ class _SelectableChip extends StatelessWidget {
           vertical: AppSpacing.sm,
         ),
         decoration: BoxDecoration(
-          color: isSelected
-              ? effectiveColor.withAlpha(25)
-              : AppColors.inputFill,
+          color:
+              isSelected ? effectiveColor.withAlpha(25) : AppColors.inputFill,
           borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
           border: Border.all(
             color: isSelected ? effectiveColor : AppColors.border,

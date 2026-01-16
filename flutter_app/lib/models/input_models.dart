@@ -137,9 +137,8 @@ class VoiceQuota {
       remaining: json['remaining'] ?? 0,
       limit: json['limit'] ?? 3,
       tier: json['tier'] ?? 'free',
-      resetsAt: json['resets_at'] != null
-          ? DateTime.parse(json['resets_at'])
-          : null,
+      resetsAt:
+          json['resets_at'] != null ? DateTime.parse(json['resets_at']) : null,
     );
   }
 
@@ -186,15 +185,17 @@ class Memory {
       normalizedData: Map<String, dynamic>.from(
         json['normalized_data'] ?? json['normalizedData'] ?? {},
       ),
-      confidenceScore:
-          (json['confidence_score'] ?? json['confidenceScore'] ?? 0.0)
-              .toDouble(),
+      confidenceScore: json['confidence_score'] != null
+          ? double.tryParse(json['confidence_score'].toString()) ?? 0.0
+          : (json['confidenceScore'] != null
+              ? double.tryParse(json['confidenceScore'].toString()) ?? 0.0
+              : 0.0),
       status: json['status'] ?? 'validated',
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'])
+          ? DateTime.tryParse(json['created_at']) ?? DateTime.now()
           : DateTime.now(),
       updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'])
+          ? DateTime.tryParse(json['updated_at'])
           : null,
     );
   }

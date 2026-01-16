@@ -14,6 +14,7 @@ import 'detail/engagement_screen.dart';
 import 'detail/patterns_screen.dart';
 import 'detail/achievements_screen.dart';
 import 'input_modal_screen.dart';
+import 'query_screen.dart';
 import '../services/engagement_service.dart';
 import '../widgets/engagement_feed.dart';
 import '../widgets/feedback_toast.dart';
@@ -141,8 +142,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     right: 0,
                     bottom: AppSpacing.inputBarHeight + AppSpacing.lg,
                     child: SuccessToast(
-                      text:
-                          inputProvider.lastFeedbackMessage ??
+                      text: inputProvider.lastFeedbackMessage ??
                           inputProvider.lastMemory!.displayText,
                       onUndo: () => inputProvider.undoLastMemory(),
                     ),
@@ -181,6 +181,16 @@ class _FeedScreenState extends State<FeedScreen> {
             style: AppTypography.h2.copyWith(color: AppColors.primary),
           ),
           const Spacer(),
+          // Search/Query Button
+          IconButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const QueryScreen()),
+            ),
+            icon:
+                const Icon(Icons.search_rounded, color: AppColors.textPrimary),
+          ),
+          const SizedBox(width: AppSpacing.sm),
           // Voice quota indicator
           Consumer<InputProvider>(
             builder: (context, inputProvider, _) {
@@ -204,9 +214,8 @@ class _FeedScreenState extends State<FeedScreen> {
                     Icon(
                       Icons.mic_rounded,
                       size: 14,
-                      color: quota.hasQuota
-                          ? AppColors.primary
-                          : AppColors.error,
+                      color:
+                          quota.hasQuota ? AppColors.primary : AppColors.error,
                     ),
                     const SizedBox(width: 4),
                     Text(

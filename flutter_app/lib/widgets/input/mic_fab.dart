@@ -26,11 +26,11 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
   void initState() {
     super.initState();
     _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 700), // Faster pulse
       vsync: this,
     );
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.35).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOutSine),
     );
   }
 

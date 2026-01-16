@@ -16,6 +16,8 @@ dependencies:
   # HTTP & API
   http: ^1.1.2
   firebase_auth: ^4.16.0
+  google_sign_in: ^6.1.5
+  web_socket_channel: ^2.4.0
   
   # Local Storage
   shared_preferences: ^2.2.2

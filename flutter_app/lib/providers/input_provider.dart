@@ -358,6 +358,7 @@ class InputProvider extends ChangeNotifier {
     String? category,
     Map<String, dynamic>? entities,
   }) async {
+    // ... existing implementation
     if (_pendingResult == null) return false;
 
     _updateState(InputState.processing);
@@ -369,22 +370,19 @@ class InputProvider extends ChangeNotifier {
         category: category ?? _pendingResult!.detectedCategory,
         entities: entities ?? _pendingResult!.detectedEntities,
       );
-
+      // ... rest of implementation (using existing code logic)
       if (!response.success || response.data == null) {
+        // ... retry logic
         if (_retryCount < _maxRetries) {
           _retryCount++;
           await Future.delayed(const Duration(seconds: 1));
           return confirmInput(
-            editedText: editedText,
-            category: category,
-            entities: entities,
-          );
+              editedText: editedText, category: category, entities: entities);
         }
         _retryCount = 0;
         _handleError(response.error ?? 'Failed to confirm input');
         return false;
       }
-
       _retryCount = 0;
       _lastMemory = response.data!.memory;
       _lastFeedbackMessage =
@@ -393,18 +391,32 @@ class InputProvider extends ChangeNotifier {
       _handleSuccess();
       return true;
     } catch (e) {
+      // ... catch logic
       if (_retryCount < _maxRetries) {
         _retryCount++;
         await Future.delayed(const Duration(seconds: 1));
         return confirmInput(
-          editedText: editedText,
-          category: category,
-          entities: entities,
-        );
+            editedText: editedText, category: category, entities: entities);
       }
       _retryCount = 0;
       _handleError(e.toString());
       return false;
+    }
+  }
+
+  /// Update pending category (User Manual Override)
+  void updatePendingCategory(String category) {
+    if (_pendingResult != null) {
+      // Create a copy with new category
+      _pendingResult = InputResult(
+        enhancedText: _pendingResult!.enhancedText,
+        detectedCategory: category, // Override
+        confidenceScore: _pendingResult!.confidenceScore,
+        needsConfirmation: _pendingResult!.needsConfirmation,
+        shortResponse: _pendingResult!.shortResponse,
+        detectedEntities: _pendingResult!.detectedEntities,
+      );
+      notifyListeners();
     }
   }
 

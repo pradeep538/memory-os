@@ -24,6 +24,8 @@ class WebSocketService {
 
   /// Connect to WebSocket server
   void connect() {
+    print('🚫 WebSocket disabled temporarily');
+    return;
     try {
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
       _isConnected = true;

@@ -72,6 +72,14 @@ export class ChatHandler {
             return await this.handleCorrectionCommand(ws, userId, correction);
         }
 
+        // --- NEW: Check for Plan Creation Intent ---
+        // Simple regex for now (or use hybridExtractor if updated)
+        const planRegex = /(?:create|make|generate|build).*(?:plan|goal|routine)/i;
+        if (planRegex.test(text)) {
+            return await this.handlePlanCreation(ws, userId, text);
+        }
+        // -------------------------------------------
+
         // Extract intent
         const extraction = await hybridExtractor.extract(text);
 
@@ -99,6 +107,44 @@ export class ChatHandler {
 
         // Send updated stats
         await this.sendStats(ws, userId);
+    }
+
+    /**
+     * Handle Plan Creation Logic
+     */
+    async handlePlanCreation(ws, userId, text) {
+        // 1. Send "Thinking..." state
+        this.sendBotMessage(ws, { text: "🧠 Analyzing your goal and designing a plan..." });
+
+        try {
+            // 2. Parse Category & Goal using LLM (Quick & Dirty extraction)
+            // Lazy import to avoid circular dependency
+            const { default: llmService } = await import('../../services/understanding/llmService.js');
+            const { default: planGenerator } = await import('../../services/plans/planGenerator.js');
+
+            const parsed = await llmService.understand(text);
+            // Reuse understand() - it returns { eventType, category, entities }
+
+            const category = parsed.category || 'generic';
+            const goal = parsed.entities?.activity || parsed.entities?.item || parsed.entities?.note || text;
+
+            // 3. Generate Plan
+            // Note: We use generatePlan() which saves it immediately.
+            // Ideally for chat we might want to "preview" first, but let's save as 'suggested' status?
+            // Current PlanGenerator saves as 'active'.
+            const plan = await planGenerator.generatePlan(userId, category, goal);
+
+            // 4. Send Plan Card
+            this.sendBotMessage(ws, {
+                text: `Here is a drafted plan for **${goal}**.`,
+                messageType: 'plan_generated',
+                planData: plan // Send full plan JSON to frontend
+            });
+
+        } catch (error) {
+            console.error('Plan Chat Error:', error);
+            this.sendError(ws, "I couldn't generate that plan. Try being more specific (e.g., 'Create a fitness plan to run 5k')");
+        }
     }
 
     /**
@@ -312,6 +358,7 @@ export class ChatHandler {
             text: data.text,
             messageType: data.messageType || 'text',
             chartData: data.chartData || null,
+            planData: data.planData || null, // Allow sending plan objects
             timestamp: new Date().toISOString(),
             replyTo
         }));

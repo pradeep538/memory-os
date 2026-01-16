@@ -559,7 +559,39 @@ class _InputModalScreenState extends State<InputModalScreen>
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
-              CategoryChip(category: result.detectedCategory),
+              PopupMenuButton<String>(
+                initialValue: result.detectedCategory,
+                onSelected: (String cat) =>
+                    inputProvider.updatePendingCategory(cat),
+                itemBuilder: (BuildContext context) =>
+                    ['fitness', 'finance', 'health', 'mindfulness', 'routine']
+                        .map((cat) => PopupMenuItem<String>(
+                              value: cat,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.getCategoryColor(cat),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(cat[0].toUpperCase() + cat.substring(1)),
+                                ],
+                              ),
+                            ))
+                        .toList(),
+                child: Row(
+                  children: [
+                    CategoryChip(category: result.detectedCategory),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.arrow_drop_down,
+                        color: AppColors.textSecondary, size: 20),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),

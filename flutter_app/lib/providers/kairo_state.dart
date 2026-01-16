@@ -41,21 +41,25 @@ class KairoState extends ChangeNotifier {
 
   /// Connect to WebSocket
   void connectWebSocket(String userId) {
-    _ws = WebSocketService(userId: userId);
-    _ws!.connect();
+    // WebSocket Disabled temporarily as per user request
+    print('🚫 WebSocket disabled');
+    return;
 
-    // Listen to messages
-    _messageSubscription = _ws!.messageStream.listen((data) {
-      handleServerMessage(data);
-    });
+    // _ws = WebSocketService(userId: userId);
+    // _ws!.connect();
 
-    _isConnected = true;
-    notifyListeners();
+    // // Listen to messages
+    // _messageSubscription = _ws!.messageStream.listen((data) {
+    //   handleServerMessage(data);
+    // });
 
-    // Request initial stats
-    Future.delayed(Duration(milliseconds: 500), () {
-      _ws!.requestStats();
-    });
+    // _isConnected = true;
+    // notifyListeners();
+
+    // // Request initial stats
+    // Future.delayed(Duration(milliseconds: 500), () {
+    //   _ws!.requestStats();
+    // });
   }
 
   /// Handle incoming WebSocket message

@@ -7,3 +7,5 @@ export 'engagement_service.dart';
 export 'notifications_service.dart';
 export 'query_service.dart';
 export 'feature_flag_service.dart';
+export 'analytics_service.dart';
+export 'entity_service.dart';

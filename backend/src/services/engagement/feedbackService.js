@@ -38,8 +38,29 @@ class FeedbackService {
      * Generate deterministic feedback based on recent activity
      */
     async generateImmediateLogic(userId, memoryId) {
-        // 1. Check Streak (need Logic)
-        // For now, mockup logic or querying DB directly
+        // 0. Import deps dynamically to avoid circles
+        const { query } = await import('../../db/index.js');
+        const habitService = (await import('../habits/habitService.js')).default;
+        const memoryModel = (await import('../../models/memory.model.js')).default;
+
+        // 1. Get Memory Text
+        const memory = await memoryModel.findById(memoryId);
+        if (memory && memory.raw_input) {
+            const text = memory.normalized_data?.enhanced_text || memory.raw_input;
+
+            // CHECK HABIT COMPLETION
+            try {
+                const matchedHabit = await habitService.checkCompletionIntent(userId, text);
+                if (matchedHabit) {
+                    await habitService.logCompletion(matchedHabit.id, userId, true, text);
+                    console.log(`✓ FeedbackService: Auto-competed habit "${matchedHabit.habit_name}"`);
+                }
+            } catch (hErr) {
+                console.error('FeedbackService Habit Check Failed:', hErr);
+            }
+        }
+
+        // 2. Check Streak (Existing Logic)
         const streakSql = `
             SELECT current_logging_streak FROM user_engagement WHERE user_id = $1
         `;

@@ -1,4 +1,5 @@
 import llmService from '../understanding/llmService.js';
+import PlanModel from '../../models/plan.model.js';
 
 /**
  * Input Enhancement Service
@@ -12,9 +13,10 @@ class InputEnhancementService {
      * Enhance raw user input
      * @param {string} rawText - Raw transcription or typed text
      * @param {string} source - 'voice' or 'text'
+     * @param {string} userId - User ID for context (optional but recommended)
      * @returns {Promise<EnhancementResult>}
      */
-    async enhance(rawText, source = 'text') {
+    async enhance(rawText, source = 'text', userId = null) {
         if (!rawText || rawText.trim().length < 2) {
             return {
                 success: false,
@@ -24,8 +26,18 @@ class InputEnhancementService {
         }
 
         try {
-            // Build enhancement prompt
-            const prompt = this.buildEnhancementPrompt(rawText);
+            // Fetch active plans if userId is provided
+            let activePlans = [];
+            if (userId) {
+                try {
+                    activePlans = await PlanModel.findActive(userId);
+                } catch (err) {
+                    console.warn('Failed to fetch active plans for context:', err.message);
+                }
+            }
+
+            // Build enhancement prompt with Plan Context
+            const prompt = this.buildEnhancementPrompt(rawText, activePlans);
 
             // Call LLM
             const llmResponse = await llmService.generateStructuredResponse(prompt);
@@ -58,20 +70,31 @@ class InputEnhancementService {
     }
 
     /**
-     * Build LLM enhancement prompt
+     * Build LLM enhancement prompt with Action Plan Context
      */
-    buildEnhancementPrompt(rawText) {
-        return `You are an intelligent life tracking assistant. A user has logged an activity using casual, incomplete speech or text.
+    buildEnhancementPrompt(rawText, activePlans = []) {
+        // Construct Plan Context String
+        let planContext = "No active plans.";
+        if (activePlans.length > 0) {
+            planContext = activePlans.map(p =>
+                `- Plan ID: "${p.id}", Goal: "${p.plan_name}", Category: "${p.category}"`
+            ).join("\n");
+        }
+
+        return `You are an intelligent life tracking assistant.
+Input: "${rawText}"
+
+CONTEXT: The user has these ACTIVE ACTION PLANS:
+${planContext}
 
 Your task:
-1. Transform the input into a complete, natural sentence
-2. Fill in implied context (articles, prepositions, etc.)
-3. Fix grammar and syntax
-4. Keep it concise (1-2 sentences max)
-5. Maintain the original meaning - don't add information not implied
-6. Extract key entities (duration, amount, category, etc.)
-
-Input: "${rawText}"
+1. Transform the input into a complete, natural sentence.
+2. Fill in implied context (articles, prepositions, etc.).
+3. Fix grammar and syntax.
+4. Extract key entities (duration, amount, category, etc.).
+5. **CRITICAL**: Check if this input fulfills any of the Active Plans above.
+   - Example: If input is "Ran 5k" and Plan is "Fitness", is_fulfilled = true.
+   - Example: If input is "Skipped gym", is_fulfilled = false (Progress 0).
 
 Respond ONLY with valid JSON in this exact format:
 {
@@ -81,53 +104,20 @@ Respond ONLY with valid JSON in this exact format:
     "duration_minutes": number or null,
     "amount": number or null,
     "activity_type": "string or null",
-    "location": "string or null",
-    "intensity": "string or null",
-    "mood": "string or null",
-    "category_specific": {}
+    "location": "string or null"
   },
+  "plan_updates": [
+    {
+      "plan_id": "UUID from context",
+      "is_fulfilled": boolean,
+      "progress_value": number, // default 1 if just "did it", or specific amount
+      "progress_unit": "string"
+    }
+  ],
   "semantic_confidence": 0.0 to 1.0,
   "confirmation_message": "Short, crisp first-person confirmation",
   "reasoning": "Brief explanation of interpretation"
-}
-
-Examples:
-
-Input: "went gym leg workout hour"
-Output: {
-  "enhanced_text": "Went to gym for leg workout for 1 hour",
-  "detected_category": "fitness",
-  "detected_entities": {
-    "duration_minutes": 60,
-    "activity_type": "leg workout",
-    "location": "gym"
-  },
-  "semantic_confidence": 0.95,
-  "reasoning": "Clear fitness activity with duration and location"
-}
-
-Input: "spent forty groceries"
-Output: {
-  "enhanced_text": "Spent $40 on groceries",
-  "detected_category": "finance",
-  "detected_entities": {
-    "amount": 40,
-    "category_specific": {"subcategory": "groceries"}
-  },
-  "semantic_confidence": 0.7,
-  "reasoning": "Likely expense but unclear if $40 or $40.00"
-}
-
-Input: "did thing morning"
-Output: {
-  "enhanced_text": "Did something this morning",
-  "detected_category": "generic",
-  "detected_entities": {},
-  "semantic_confidence": 0.3,
-  "reasoning": "Too vague, multiple interpretations possible"
-}
-
-Now process the user input and respond ONLY with JSON.`;
+}`;
     }
 
     /**
@@ -151,6 +141,7 @@ Now process the user input and respond ONLY with JSON.`;
                 raw_text: rawText,
                 detected_category: parsed.detected_category || 'generic',
                 detected_entities: parsed.detected_entities || {},
+                plan_updates: parsed.plan_updates || [], // Extract plan updates
                 semantic_confidence: parsed.semantic_confidence || 0.5,
                 confirmation_message: parsed.confirmation_message || parsed.enhanced_text || 'Logged',
                 reasoning: parsed.reasoning || ''

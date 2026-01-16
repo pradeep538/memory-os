@@ -55,6 +55,7 @@ class ChatMessage {
   final bool isUser;
   final String? messageType;
   final Map<String, dynamic>? chartData;
+  final Map<String, dynamic>? planData;
   final String? replyTo;
 
   ChatMessage({
@@ -64,6 +65,7 @@ class ChatMessage {
     required this.isUser,
     this.messageType,
     this.chartData,
+    this.planData,
     this.replyTo,
   });
 
@@ -80,6 +82,7 @@ class ChatMessage {
       isUser: isUser,
       messageType: json['messageType'],
       chartData: json['chartData'],
+      planData: json['planData'],
       replyTo: json['replyTo'],
     );
   }

@@ -1,7 +1,26 @@
 import planGenerator from '../../services/plans/planGenerator.js';
+import PlanModel from '../../models/plan.model.js';
 import auth from '../../middleware/auth.js';
 
 export default async function planRoutes(fastify, options) {
+    /**
+     * Get active plans
+     */
+    fastify.get('/plans/active', { preHandler: auth.authenticate }, async (request, reply) => {
+        try {
+            const userId = request.userId;
+            const activePlans = await PlanModel.findActive(userId);
+
+            return {
+                success: true,
+                data: activePlans
+            };
+        } catch (error) {
+            reply.code(500);
+            return { success: false, error: error.message };
+        }
+    });
+
     /**
      * Generate a new plan
      */

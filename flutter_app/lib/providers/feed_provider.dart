@@ -56,6 +56,7 @@ class FeedProvider extends ChangeNotifier {
   final HabitsService _habitsService;
   final InsightsService _insightsService;
   final EngagementService _engagementService;
+  final AnalyticsService _analyticsService;
   final NotificationsService _notificationsService;
   final FeatureFlagService _featureFlagService;
 
@@ -64,12 +65,14 @@ class FeedProvider extends ChangeNotifier {
     required HabitsService habitsService,
     required InsightsService insightsService,
     required EngagementService engagementService,
+    required AnalyticsService analyticsService,
     required NotificationsService notificationsService,
     required FeatureFlagService featureFlagService,
   })  : _memoryService = memoryService,
         _habitsService = habitsService,
         _insightsService = insightsService,
         _engagementService = engagementService,
+        _analyticsService = analyticsService,
         _notificationsService = notificationsService,
         _featureFlagService = featureFlagService;
 
@@ -113,18 +116,25 @@ class FeedProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    try {
-      await Future.wait([
-        _loadMemories(),
-        _loadHabits(),
-        _loadInsights(),
-        _loadEngagement(),
-        _loadNotifications(),
-        _loadCategoryStats(),
-      ]);
+    // Run loads independently to prevent one failure from blocking others
+    await Future.wait([
+      _loadMemories()
+          .catchError((e) => debugPrint('Error loading memories: $e')),
+      _loadHabits().catchError((e) => debugPrint('Error loading habits: $e')),
+      _loadInsights()
+          .catchError((e) => debugPrint('Error loading insights: $e')),
+      _loadEngagement()
+          .catchError((e) => debugPrint('Error loading engagement: $e')),
+      _loadNotifications()
+          .catchError((e) => debugPrint('Error loading notifications: $e')),
+      _loadCategoryStats()
+          .catchError((e) => debugPrint('Error loading stats: $e')),
+    ]);
 
+    try {
       _calculateWidgetPriorities();
     } catch (e) {
+      debugPrint('Error calculating priorities: $e');
       _error = e.toString();
     }
 
@@ -167,11 +177,11 @@ class FeedProvider extends ChangeNotifier {
   }
 
   Future<void> _loadEngagement() async {
-    // TODO: Implement getSummary in EngagementService
-    // final response = await _engagementService.getSummary();
-    // if (response.success && response.data != null) {
-    //   _engagementSummary = response.data;
-    // }
+    // Get stats for current user (use 'current' or get from auth provider if available)
+    final response = await _analyticsService.getConsistencyScore('current');
+    if (response.success && response.data != null) {
+      _engagementSummary = response.data;
+    }
   }
 
   Future<void> _loadNotifications() async {
@@ -189,17 +199,47 @@ class FeedProvider extends ChangeNotifier {
   }
 
   /// Calculate widget priorities based on time, usage, freshness, etc.
+  /// Calculate widget priorities based on time, usage, freshness, etc.
   void _calculateWidgetPriorities() {
     final now = DateTime.now();
-    final hour = now.hour;
     final List<FeedWidgetData> newWidgets = [];
 
-    // Time-based priority multipliers
-    final isMorning = hour >= 7 && hour < 10;
-    final isEvening = hour >= 17 && hour < 21;
+    // 1. Engagement Score - ALWAYS PINNED TOP
+    if (_engagementSummary != null) {
+      newWidgets.add(
+        FeedWidgetData(
+          type: FeedWidgetType.engagementScore,
+          id: 'engagement_score',
+          priority: 100.0, // Absolute highest priority
+          lastUpdated: now, // Always fresh
+          data: _engagementSummary,
+        ),
+      );
+    }
 
-    // Habits Checklist
-    // Show if: Has Habits OR Feature Flag says visible (Promo/Onboarding)
+    // 2. Streak Milestone - High Priority (Pin below score)
+    if (_engagementSummary != null &&
+        _engagementSummary!.engagement.currentLoggingStreak > 0) {
+      final streak = _engagementSummary!.engagement.currentLoggingStreak;
+      // Show if hitting a milestone (7, 14, 30, 60, 90, etc.)
+      if (streak == 7 || streak == 14 || streak == 30 || streak % 30 == 0) {
+        newWidgets.add(
+          FeedWidgetData(
+            type: FeedWidgetType.streakMilestone,
+            id: 'streak_milestone',
+            priority: 99.0,
+            lastUpdated: now,
+            data: streak,
+            isNew: true,
+          ),
+        );
+      }
+    }
+
+    // 3. Dynamic Widgets (Sorted by Time)
+
+    // Habits Checklist (Daily)
+    // We treat this as "Today's" widget, so updated at start of day or now.
     final showHabits = _habits.isNotEmpty ||
         _featureFlagService.isFeatureVisible('widget_habits');
 
@@ -209,8 +249,8 @@ class FeedProvider extends ChangeNotifier {
         FeedWidgetData(
           type: FeedWidgetType.habitsChecklist,
           id: 'habits_checklist',
-          priority: isMorning ? 0.95 : 0.75,
-          lastUpdated: now,
+          priority: 50.0,
+          lastUpdated: now, // Always relevant "now"
           data: {
             'habits': _habits,
             'completedToday': completedToday,
@@ -220,108 +260,23 @@ class FeedProvider extends ChangeNotifier {
       );
     }
 
-    // Recent Memories - always relevant
-    if (_recentMemories.isNotEmpty) {
-      newWidgets.add(
-        FeedWidgetData(
-          type: FeedWidgetType.recentMemories,
-          id: 'recent_memories',
-          priority: 0.80,
-          lastUpdated: now,
-          data: _recentMemories,
-        ),
-      );
-    }
+    // Recent Memories - ALWAYS ADD for debugging
+    // if (_recentMemories.isNotEmpty) {
+    final latestMemoryTime = _recentMemories.isNotEmpty
+        ? _recentMemories.first.createdAt
+        : DateTime.now();
 
-    // Engagement Score - higher in evening
-    if (_engagementSummary != null) {
-      newWidgets.add(
-        FeedWidgetData(
-          type: FeedWidgetType.engagementScore,
-          id: 'engagement_score',
-          priority: isEvening ? 0.85 : 0.70,
-          lastUpdated: now,
-          data: _engagementSummary,
-        ),
-      );
-    }
-
-    // Category summaries based on stats
-    if (_categoryStats['fitness'] != null && _categoryStats['fitness']! > 0) {
-      newWidgets.add(
-        FeedWidgetData(
-          type: FeedWidgetType.fitnessSummary,
-          id: 'fitness_summary',
-          priority: 0.65,
-          lastUpdated: now,
-          data: _recentMemories
-              .where((m) => m.category == 'fitness')
-              .take(5)
-              .toList(),
-        ),
-      );
-    }
-
-    if (_categoryStats['finance'] != null && _categoryStats['finance']! > 0) {
-      newWidgets.add(
-        FeedWidgetData(
-          type: FeedWidgetType.financeSummary,
-          id: 'finance_summary',
-          priority: isEvening ? 0.70 : 0.60,
-          lastUpdated: now,
-          data: _recentMemories
-              .where((m) => m.category == 'finance')
-              .take(5)
-              .toList(),
-        ),
-      );
-    }
-
-    if (_categoryStats['health'] != null && _categoryStats['health']! > 0) {
-      newWidgets.add(
-        FeedWidgetData(
-          type: FeedWidgetType.healthDashboard,
-          id: 'health_dashboard',
-          priority: 0.60,
-          lastUpdated: now,
-          data: _recentMemories
-              .where((m) => m.category == 'health')
-              .take(5)
-              .toList(),
-        ),
-      );
-    }
-
-    if (_categoryStats['mindfulness'] != null &&
-        _categoryStats['mindfulness']! > 0) {
-      newWidgets.add(
-        FeedWidgetData(
-          type: FeedWidgetType.mindfulnessTracker,
-          id: 'mindfulness_tracker',
-          priority: isMorning ? 0.70 : 0.55,
-          lastUpdated: now,
-          data: _recentMemories
-              .where((m) => m.category == 'mindfulness')
-              .take(5)
-              .toList(),
-        ),
-      );
-    }
-
-    if (_categoryStats['routine'] != null && _categoryStats['routine']! > 0) {
-      newWidgets.add(
-        FeedWidgetData(
-          type: FeedWidgetType.routineTimeline,
-          id: 'routine_timeline',
-          priority: isMorning ? 0.75 : 0.50,
-          lastUpdated: now,
-          data: _recentMemories
-              .where((m) => m.category == 'routine')
-              .take(5)
-              .toList(),
-        ),
-      );
-    }
+    newWidgets.add(
+      FeedWidgetData(
+        type: FeedWidgetType.recentMemories,
+        id: 'recent_memories',
+        priority:
+            85.0, // Boost priority to ensure visibility (above habits, below score)
+        lastUpdated: latestMemoryTime,
+        data: _recentMemories,
+      ),
+    );
+    // }
 
     // Insights/Patterns
     for (final insight in _insights.take(3)) {
@@ -329,15 +284,15 @@ class FeedProvider extends ChangeNotifier {
         FeedWidgetData(
           type: FeedWidgetType.patternDetected,
           id: 'pattern_${insight.id}',
-          priority: insight.isNew ? 0.90 : 0.65,
-          lastUpdated: now,
+          priority: insight.isNew ? 60.0 : 30.0,
+          lastUpdated: insight.lastUpdated ?? DateTime.now(), // Use real time
           data: insight,
           isNew: insight.isNew,
         ),
       );
     }
 
-    // Gap warnings from notifications
+    // Gap warnings
     final gapNotifications = _notifications
         .where(
           (n) => n.type == 'alert' || n.title.toLowerCase().contains('gap'),
@@ -348,34 +303,66 @@ class FeedProvider extends ChangeNotifier {
         FeedWidgetData(
           type: FeedWidgetType.gapWarning,
           id: 'gap_${notif.id}',
-          priority: 0.85,
-          lastUpdated: now,
+          priority: 70.0,
+          lastUpdated: notif.createdAt, // Use real time
           data: notif,
         ),
       );
     }
 
-    // Streak milestone
-    if (_engagementSummary != null &&
-        _engagementSummary!.engagement.currentLoggingStreak > 0) {
-      final streak = _engagementSummary!.engagement.currentLoggingStreak;
-      // Show if hitting a milestone (7, 14, 30, 60, 90, etc.)
-      if (streak == 7 || streak == 14 || streak == 30 || streak % 30 == 0) {
+    // Category Summaries - Only show if relevant recently
+    // We can assume they are "Weekly" summaries, so maybe show them if not shown recently?
+    // For "Minimal", let's ONLY show them if they have high activity TODAY.
+    // Simplifying: Just let them fall into the feed based on "now".
+
+    void addCategoryWidget(String category, FeedWidgetType type, String id) {
+      if (_categoryStats[category] != null && _categoryStats[category]! > 0) {
         newWidgets.add(
           FeedWidgetData(
-            type: FeedWidgetType.streakMilestone,
-            id: 'streak_milestone',
-            priority: 0.95,
-            lastUpdated: now,
-            data: streak,
-            isNew: true,
+            type: type,
+            id: id,
+            priority: 20.0,
+            lastUpdated: now.subtract(
+                const Duration(hours: 2)), // Slightly older to push down
+            data: _recentMemories
+                .where((m) => m.category == category)
+                .take(5)
+                .toList(),
           ),
         );
       }
     }
 
-    // Sort by priority descending
-    newWidgets.sort((a, b) => b.priority.compareTo(a.priority));
+    addCategoryWidget(
+        'fitness', FeedWidgetType.fitnessSummary, 'fitness_summary');
+    addCategoryWidget(
+        'finance', FeedWidgetType.financeSummary, 'finance_summary');
+    addCategoryWidget(
+        'health', FeedWidgetType.healthDashboard, 'health_dashboard');
+    addCategoryWidget('mindfulness', FeedWidgetType.mindfulnessTracker,
+        'mindfulness_tracker');
+    addCategoryWidget(
+        'routine', FeedWidgetType.routineTimeline, 'routine_timeline');
+
+    // SORTING LOGIC:
+    // 1. Pinned items (Priority > 90) stay at top.
+    // 2. Rest are sorted by Date (Newest First).
+
+    newWidgets.sort((a, b) {
+      // Use a threshold for "Pinned"
+      final aPinned = a.priority > 90;
+      final bPinned = b.priority > 90;
+
+      if (aPinned && bPinned) {
+        return b.priority.compareTo(a.priority); // Higher priority first
+      }
+      if (aPinned) return -1; // a comes first
+      if (bPinned) return 1; // b comes first
+
+      // Otherwise sort by Time
+      return b.lastUpdated.compareTo(a.lastUpdated);
+    });
+
     _widgets = newWidgets;
   }
 

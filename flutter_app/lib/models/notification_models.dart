@@ -25,10 +25,16 @@ class AppNotification {
   factory AppNotification.fromJson(Map<String, dynamic> json) {
     return AppNotification(
       id: json['id'] ?? '',
-      type: json['notification_type'] ?? json['notificationType'] ?? json['type'] ?? 'insight',
+      type: json['notification_type'] ??
+          json['notificationType'] ??
+          json['type'] ??
+          'insight',
       title: json['title'] ?? '',
       teaser: json['teaser'] ?? json['preview'],
-      fullContent: json['full_content'] ?? json['fullContent'] ?? json['content'],
+      fullContent: json['full_content'] ??
+          json['fullContent'] ??
+          json['content'] ??
+          json['body'],
       status: json['status'] ?? 'sent',
       isRevealed: json['is_revealed'] ?? json['isRevealed'] ?? false,
       scheduledFor: json['scheduled_for'] != null
@@ -40,7 +46,8 @@ class AppNotification {
     );
   }
 
-  String get displayContent => isRevealed ? (fullContent ?? teaser ?? '') : (teaser ?? title);
+  String get displayContent =>
+      isRevealed ? (fullContent ?? teaser ?? '') : (teaser ?? title);
 
   String get typeIcon {
     switch (type) {
@@ -74,8 +81,10 @@ class NotificationReveal {
 
   factory NotificationReveal.fromJson(Map<String, dynamic> json) {
     return NotificationReveal(
-      notificationId: json['notification_id'] ?? json['notificationId'] ?? json['id'] ?? '',
-      fullContent: json['full_content'] ?? json['fullContent'] ?? json['content'] ?? '',
+      notificationId:
+          json['notification_id'] ?? json['notificationId'] ?? json['id'] ?? '',
+      fullContent:
+          json['full_content'] ?? json['fullContent'] ?? json['content'] ?? '',
       category: json['category'],
       metadata: json['metadata'] as Map<String, dynamic>?,
     );

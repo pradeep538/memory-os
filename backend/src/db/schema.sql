@@ -101,31 +101,19 @@ CREATE TABLE patterns (
 CREATE INDEX idx_patterns_user_category ON patterns(user_id, category);
 
 -- 5. Plans (Intelligent recommendations)
+-- 5. Plans (Intelligent recommendations)
 CREATE TABLE plans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    category VARCHAR(100),
-    
-    plan_type VARCHAR(100), -- gym, yoga, budget, routine
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    
-    -- Plan data
-    template_name VARCHAR(100),
-    plan_data JSONB NOT NULL,
-    
-    -- Status
-    status VARCHAR(20) DEFAULT 'suggested',
-    
-    -- Tracking
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category VARCHAR(50) NOT NULL,
+    plan_name VARCHAR(255) NOT NULL,
+    plan_data JSONB NOT NULL DEFAULT '{}',
+    duration_weeks INTEGER NOT NULL DEFAULT 4,
+    current_week INTEGER NOT NULL DEFAULT 1,
+    progress INTEGER NOT NULL DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    started_at TIMESTAMPTZ,
-    completed_at TIMESTAMPTZ,
-    
-    -- Source
-    generated_from_pattern UUID REFERENCES patterns(id),
-    
-    CONSTRAINT valid_plan_status CHECK (status IN ('suggested', 'active', 'completed', 'abandoned'))
+    last_updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_plans_user_status ON plans(user_id, status);
@@ -198,6 +186,25 @@ CREATE TABLE usage_tracking (
 );
 
 CREATE INDEX idx_usage_user_period ON usage_tracking(user_id, period, period_start);
+
+-- 9. Routine Schedules (For Notifications)
+CREATE TABLE routine_schedules (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    routine_name VARCHAR(255) NOT NULL,
+    routine_type VARCHAR(100),
+    notification_title VARCHAR(255),
+    notification_body TEXT,
+    schedule_times TIME[] DEFAULT '{}',
+    schedule_days INTEGER[] DEFAULT '{}', -- 1-7 (1=Mon, 7=Sun)
+    notification_enabled BOOLEAN DEFAULT true,
+    last_notification_sent TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_routines_user ON routine_schedules(user_id);
+CREATE INDEX idx_routines_enabled ON routine_schedules(notification_enabled);
 
 -- Functions for automatic timestamps
 CREATE OR REPLACE FUNCTION update_updated_at_column()

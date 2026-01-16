@@ -4,7 +4,7 @@
  * Checks for routines due at current time and sends notifications
  */
 
-import { query as db } from '../db/index.js';
+import { query } from '../db/index.js';
 
 // Queue configuration
 export const QUEUE_NAME = 'notification';
@@ -20,7 +20,7 @@ export default async function notificationWorker() {
 
     try {
         // Find routines scheduled for this time
-        const scheduled = await db.query(`
+        const { rows: scheduled } = await query(`
       SELECT 
         rs.id,
         rs.user_id,
@@ -34,8 +34,8 @@ export default async function notificationWorker() {
       FROM routine_schedules rs
       JOIN users u ON u.id = rs.user_id
       WHERE rs.notification_enabled = true
-        AND ? = ANY(rs.schedule_times::TEXT[])
-        AND ? = ANY(rs.schedule_days)
+        AND $1 = ANY(rs.schedule_times::TEXT[])
+        AND $2 = ANY(rs.schedule_days)
     `, [currentTime, currentDay]);
 
         console.log(`[Notification Worker] Found ${scheduled.length} scheduled routines`);
@@ -65,7 +65,7 @@ export default async function notificationWorker() {
             await sendNotification(routine);
 
             // Update last sent timestamp
-            await db.query(`
+            await query(`
         UPDATE routine_schedules 
         SET last_notification_sent = NOW(),
             updated_at = NOW()
@@ -84,7 +84,7 @@ export default async function notificationWorker() {
  * Check if routine was completed today
  */
 async function checkCompletedToday(userId, routineName) {
-    const result = await db.query(`
+    const result = await query(`
     SELECT EXISTS(
       SELECT 1 FROM memory_units
       WHERE user_id = ?

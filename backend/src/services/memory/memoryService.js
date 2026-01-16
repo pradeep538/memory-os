@@ -37,6 +37,16 @@ class MemoryService {
             // Continue even if module processing fails
         }
 
+        // --- NEW: Update Plan Progress ---
+        try {
+            // Lazy load to avoid circular dependencies if any
+            const { default: planProgress } = await import('../plans/planProgress.js');
+            await planProgress.updateProgress(memory);
+        } catch (error) {
+            console.error('❌ Plan progress update failed:', error);
+        }
+        // --------------------------------
+
         return memory;
     }
 

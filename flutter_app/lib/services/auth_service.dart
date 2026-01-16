@@ -115,7 +115,15 @@ class AuthService {
   /// Sign out from all providers
   Future<void> signOut() async {
     try {
-      await Future.wait([_auth.signOut(), _googleSignIn.signOut()]);
+      // Try to sign out of Google first, but don't let it block Firebase signout
+      try {
+        await _googleSignIn.signOut();
+      } catch (e) {
+        debugPrint('Google sign out error (ignoring): $e');
+      }
+
+      // Always sign out of Firebase
+      await _auth.signOut();
     } catch (e) {
       debugPrint('Error signing out: $e');
       rethrow;
@@ -139,6 +147,16 @@ class AuthService {
 
   /// Check if user is signed in
   bool get isSignedIn => _auth.currentUser != null;
+
+  /// Sign in anonymously (Guest Mode)
+  Future<UserCredential> signInAnonymously() async {
+    try {
+      return await _auth.signInAnonymously();
+    } catch (e) {
+      debugPrint('Error signing in anonymously: $e');
+      rethrow;
+    }
+  }
 
   /// Link phone number to existing account
   Future<UserCredential?> linkPhoneNumber({

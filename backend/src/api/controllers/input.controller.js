@@ -4,6 +4,7 @@ import llmService from '../../services/understanding/llmService.js';
 import inputEnhancementService from '../../services/input/inputEnhancementService.js';
 import habitService from '../../services/habits/habitService.js';
 import MemoryModel from '../../models/memory.model.js';
+import PlanModel from '../../models/plan.model.js';
 import queue from '../../lib/queue.js';
 import { validationService } from '../../services/validation/validationService.js';
 import { hybridExtractor } from '../../services/extraction/hybridExtractor.js';
@@ -80,8 +81,8 @@ class InputController {
                 // Continue to LLM enhancement
             }
 
-            // Step 2: Enhance with LLM
-            const enhancement = await inputEnhancementService.enhance(text, 'text');
+            // Step 2: Enhance with LLM - Pass userId for Plan Context
+            const enhancement = await inputEnhancementService.enhance(text, 'text', userId);
 
             if (!enhancement.success) {
                 // Determine if we should fail or just keep raw
@@ -220,8 +221,30 @@ class InputController {
                 console.error('Habit check failed:', hError);
             }
 
+            // Step 4.6: Update Action Plans (Context-Aware)
+            let planConfirmation = '';
+            if (enhancement.plan_updates && enhancement.plan_updates.length > 0) {
+                for (const update of enhancement.plan_updates) {
+                    if (update.is_fulfilled) {
+                        try {
+                            const updatedPlan = await PlanModel.updateProgress(
+                                update.plan_id,
+                                update.progress_value || 1,
+                                update.progress_unit,
+                                memory.id
+                            );
+                            if (updatedPlan) {
+                                planConfirmation += `\n✓ Progress on plan: "${updatedPlan.plan_name}"`;
+                            }
+                        } catch (pErr) {
+                            console.error('Failed to update plan progress:', pErr);
+                        }
+                    }
+                }
+            }
+
             // Generate success message
-            const confirmation = `✓ Logged! ${enhancement.enhanced_text}${habitConfirmation}`;
+            const confirmation = `✓ Logged! ${enhancement.enhanced_text}${habitConfirmation}${planConfirmation}`;
 
             // Step 5: Engagement (Event-Driven) 🚀
             // Publishing to 'memory.created' triggers immediate feedback & delayed analysis

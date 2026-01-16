@@ -4,12 +4,15 @@ import '../config/app_colors.dart';
 import '../config/app_typography.dart';
 import '../config/app_spacing.dart';
 import '../providers/input_provider.dart';
+import '../providers/app_provider.dart';
 import '../widgets/common/base_card.dart';
 import '../widgets/common/progress_ring.dart';
 import 'detail/achievements_screen.dart';
 import 'detail/engagement_screen.dart';
 import 'detail/patterns_screen.dart';
 import 'detail/memories_screen.dart';
+import 'detail/entities_screen.dart';
+import 'detail/plans_screen.dart';
 
 /// Profile/Me screen - settings and subscription
 class ProfileScreen extends StatelessWidget {
@@ -176,9 +179,8 @@ class ProfileScreen extends StatelessWidget {
                       progress: 1 - quota.usagePercent,
                       size: 48,
                       strokeWidth: 4,
-                      progressColor: quota.hasQuota
-                          ? AppColors.primary
-                          : AppColors.error,
+                      progressColor:
+                          quota.hasQuota ? AppColors.primary : AppColors.error,
                       showPercentage: false,
                       child: Text(
                         '${quota.remaining}',
@@ -191,7 +193,6 @@ class ProfileScreen extends StatelessWidget {
                     ),
                 ],
               ),
-
               if (quota != null) ...[
                 const SizedBox(height: AppSpacing.md),
                 ClipRRect(
@@ -217,7 +218,6 @@ class ProfileScreen extends StatelessWidget {
                   ],
                 ),
               ],
-
               if (quota == null) ...[
                 const SizedBox(height: AppSpacing.md),
                 const Center(child: CircularProgressIndicator(strokeWidth: 2)),
@@ -238,11 +238,24 @@ class ProfileScreen extends StatelessWidget {
           style: AppTypography.h4.copyWith(color: AppColors.textSecondary),
         ),
         const SizedBox(height: AppSpacing.md),
-
         BaseCard(
           padding: EdgeInsets.zero,
           child: Column(
             children: [
+              _SettingsRow(
+                icon: Icons.rocket_launch_rounded,
+                title: 'Action Plans',
+                subtitle: 'Science-based coaching',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PlansScreen(),
+                    ),
+                  );
+                },
+              ),
+              const Divider(height: 1, indent: 56),
               _SettingsRow(
                 icon: Icons.emoji_events_rounded,
                 title: 'Achievements',
@@ -282,6 +295,18 @@ class ProfileScreen extends StatelessWidget {
               ),
               const Divider(height: 1, indent: 56),
               _SettingsRow(
+                icon: Icons.hub_rounded,
+                title: 'Knowledge Graph',
+                subtitle: 'People & Topics',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const EntitiesScreen()),
+                  );
+                },
+              ),
+              const Divider(height: 1, indent: 56),
+              _SettingsRow(
                 icon: Icons.history_rounded,
                 title: 'All Memories',
                 subtitle: 'Browse your history',
@@ -308,7 +333,6 @@ class ProfileScreen extends StatelessWidget {
           style: AppTypography.h4.copyWith(color: AppColors.textSecondary),
         ),
         const SizedBox(height: AppSpacing.md),
-
         BaseCard(
           padding: EdgeInsets.zero,
           child: Column(
@@ -484,8 +508,28 @@ class ProfileScreen extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: () {
-              // TODO: Logout
+            onPressed: () async {
+              try {
+                final auth = context.read<AppProvider>().authService;
+                debugPrint('Attempting to sign out...');
+                await auth.signOut();
+                debugPrint('Sign out successful');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Signed out successfully')),
+                  );
+                }
+              } catch (e) {
+                debugPrint('Sign out failed: $e');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Sign out failed: $e'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              }
             },
             icon: const Icon(Icons.logout_rounded),
             label: const Text('Sign Out'),

@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:chatview/chatview.dart';
 import '../providers/kairo_state.dart';
 import '../widgets/rpg_micro_dashboard.dart';
-import '../widgets/voice_command_center.dart';
 import '../widgets/adherence_chart_widget.dart';
-import '../models/kairo_models.dart' as kairo_models;
+import '../models/kairo_models.dart';
 
 /// Kairo Chat Screen
-/// Cyberpunk Zen chat interface with RPG header and voice-first input
+/// Custom lightweight implementation (No external chat packages)
 class KairoChatScreen extends StatefulWidget {
   final String userId;
 
@@ -22,75 +20,117 @@ class KairoChatScreen extends StatefulWidget {
 }
 
 class _KairoChatScreenState extends State<KairoChatScreen> {
-  late ChatController _chatController;
+  final TextEditingController _textController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-
-    // Initialize chatview controller (chatview 2.4.0 API)
-    _chatController = ChatController(
-      initialMessageList: [],
-      scrollController: ScrollController(),
-      currentUser: ChatUser(id: widget.userId, name: 'You'),
-      otherUsers: [ChatUser(id: 'kairo_bot', name: 'Kairo')],
-    );
-
     // Connect WebSocket
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<KairoState>().connectWebSocket(widget.userId);
     });
   }
 
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  void _handleSend() {
+    final text = _textController.text.trim();
+    if (text.isNotEmpty) {
+      context.read<KairoState>().sendMessage(text);
+      _textController.clear();
+      // Scroll to bottom after frame
+      Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A), // Slate 900
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text('Partner with Kairo',
+            style: TextStyle(color: Colors.white, fontSize: 16)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            // Main column
-            Column(
-              children: [
-                // RPG Header
-                Consumer<KairoState>(
-                  builder: (context, kairo, child) {
-                    return RpgMicroDashboard(
-                      stats: kairo.stats,
-                      onTap: () {
-                        // TODO: Show full stats modal
-                      },
-                    );
-                  },
-                ),
-
-                // Chat messages
-                Expanded(
-                  child: _buildChatView(),
-                ),
-
-                // Spacer for voice dock
-                const SizedBox(height: 100),
-              ],
+            // RPG Header (Optional context)
+            Consumer<KairoState>(
+              builder: (context, kairo, child) {
+                return RpgMicroDashboard(
+                  stats: kairo.stats,
+                  onTap: () {},
+                );
+              },
             ),
 
-            // Voice Command Center (floating)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
+            // Message List
+            Expanded(
               child: Consumer<KairoState>(
-                builder: (context, kairo, child) {
-                  return VoiceCommandCenter(
-                    onTextInput: kairo.sendMessage,
-                    onVoiceStart: () {
-                      print('🎤 Voice started');
-                    },
-                    onVoiceEnd: () {
-                      print('🎤 Voice ended');
+                builder: (context, kairo, _) {
+                  if (kairo.messages.isNotEmpty) {
+                    Future.delayed(Duration.zero, _scrollToBottom);
+                  }
+
+                  return ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: kairo.messages.length,
+                    itemBuilder: (context, index) {
+                      final msg = kairo.messages[index];
+                      return _buildMessageBubble(msg);
                     },
                   );
                 },
+              ),
+            ),
+
+            // Input Area
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: const Color(0xFF1E293B),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _textController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Type your goal...',
+                        hintStyle: const TextStyle(color: Colors.white38),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFF0F172A),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 12),
+                      ),
+                      onSubmitted: (_) => _handleSend(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.send, color: Color(0xFF06B6D4)),
+                    onPressed: _handleSend,
+                  ),
+                ],
               ),
             ),
           ],
@@ -99,97 +139,115 @@ class _KairoChatScreenState extends State<KairoChatScreen> {
     );
   }
 
-  Widget _buildChatView() {
-    return Consumer<KairoState>(
-      builder: (context, kairo, child) {
-        // Convert Kairo messages to chatview messages (chatview 2.2.0 API)
-        final chatViewMessages = kairo.messages.map((msg) {
-          return Message(
-            id: msg.id,
-            message: msg.text,
-            createdAt: msg.timestamp,
-            sentBy:
-                msg.isUser ? widget.userId : 'kairo_bot', // Changed from sendBy
-            messageType: msg.messageType == 'chart'
-                ? MessageType.custom
-                : MessageType.text,
-          );
-        }).toList();
+  Widget _buildMessageBubble(ChatMessage msg) {
+    // Check for Plan Preview Card
+    if (msg.messageType == 'plan_generated' && msg.planData != null) {
+      return _buildPlanPreviewCard(msg);
+    }
 
-        // Update chat controller if messages changed
-        if (chatViewMessages.isNotEmpty) {
-          _chatController.initialMessageList = chatViewMessages.cast<Message>();
-        }
+    // Check for Charts
+    if (msg.chartData != null) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          width: MediaQuery.of(context).size.width * 0.8,
+          child: AdherenceChartWidget(chartData: msg.chartData!),
+        ),
+      );
+    }
 
-        return Container(
-          color: const Color(0xFF0F172A),
-          child: ChatView(
-            // currentUser removed in 2.2.0
-            chatController: _chatController,
-            chatViewState: chatViewMessages.isEmpty
-                ? ChatViewState.noData
-                : ChatViewState.hasMessages,
-
-            // Styling (Cyberpunk Zen)
-            chatBubbleConfig: ChatBubbleConfiguration(
-              inComingChatBubbleConfig: ChatBubble(
-                color: const Color(0xFF1E293B), // Slate 800
-                textStyle: const TextStyle(color: Colors.white),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                ),
-              ),
-              outgoingChatBubbleConfig: ChatBubble(
-                color: const Color(0xFF06B6D4), // Cyan
-                textStyle: const TextStyle(color: Colors.black),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                  bottomLeft: Radius.circular(16),
-                ),
-              ),
-            ),
-
-            // Background
-            chatBackgroundConfig: ChatBackgroundConfiguration(
-              backgroundColor: const Color(0xFF0F172A),
-            ),
-
-            // Custom message builder for charts
-            messageConfig: MessageConfiguration(
-              customMessageBuilder: (message) {
-                // Find corresponding Kairo message
-                final kairoMsg = kairo.messages.firstWhere(
-                  (m) => m.id == message.id,
-                  orElse: () => kairo_models.ChatMessage(
-                    id: message.id,
-                    text: message.message,
-                    timestamp: message.createdAt,
-                    isUser: false,
-                  ),
-                );
-
-                if (kairoMsg.chartData != null) {
-                  return AdherenceChartWidget(
-                    chartData: kairoMsg.chartData!,
-                  );
-                }
-
-                return const SizedBox.shrink(); // Use default text bubble
-              },
-            ),
-
-            // Typing indicator removed in 2.2.0 API
-
-            // onSendTap - required (3 params in 2.4.0)
-            onSendTap: (message, replyTo, messageType) {
-              // Not using default input - handled by Voice Command Center
-            },
+    // Standard Text Bubble
+    return Align(
+      alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        constraints:
+            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        decoration: BoxDecoration(
+          color: msg.isUser ? const Color(0xFF06B6D4) : const Color(0xFF1E293B),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(msg.isUser ? 16 : 4),
+            bottomRight: Radius.circular(msg.isUser ? 4 : 16),
           ),
-        );
-      },
+        ),
+        child: Text(
+          msg.text,
+          style: TextStyle(
+            color: msg.isUser ? Colors.black : Colors.white,
+            fontSize: 15,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlanPreviewCard(ChatMessage msg) {
+    final plan = msg.planData!;
+    final planData = plan['plan_data'] as Map<String, dynamic>;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        width: MediaQuery.of(context).size.width * 0.85,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+            color: const Color(0xFF1E293B), // Slate 800
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF06B6D4).withOpacity(0.5)),
+            boxShadow: [
+              BoxShadow(
+                  color: const Color(0xFF06B6D4).withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4))
+            ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.rocket_launch_rounded,
+                    color: Color(0xFF06B6D4)),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text(
+                  plan['plan_name'] ?? 'Action Plan',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 16),
+                  overflow: TextOverflow.ellipsis,
+                )),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              planData['description'] ?? 'Your custom plan is ready.',
+              style: const TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const Divider(color: Colors.white10, height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pushNamed(context, '/plans');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF06B6D4),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Review & Start Plan'),
+              ),
+            )
+          ],
+        ),
+      ),
     );
   }
 }
