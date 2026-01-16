@@ -11,7 +11,7 @@ class AnalyticsService {
       String userId) async {
     try {
       final response = await _apiClient.get(
-        '/analytics/consistency/$userId',
+        '/engagement/consistency', // Backend uses auth token for userId
         fromJson: (json) => EngagementSummary.fromJson(json),
       );
       return response;

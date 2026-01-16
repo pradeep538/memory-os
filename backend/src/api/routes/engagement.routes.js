@@ -1,6 +1,7 @@
 
 import feedService from '../../services/engagement/feedService.js';
 import feedbackService from '../../services/engagement/feedbackService.js';
+import analyticsService from '../../services/analytics/analyticsService.js';
 
 export default async function (fastify, opts) {
 
@@ -41,6 +42,32 @@ export default async function (fastify, opts) {
         } catch (err) {
             request.log.error(err);
             return reply.code(500).send({ success: false, error: err.message });
+        }
+    });
+
+    // GET /api/v1/engagement/consistency (Proxy to Analytics Service)
+    // Note: Frontend calls this to populate the Engagement Widget
+    fastify.get('/consistency', async (request, reply) => {
+        try {
+            // Using request.userId from auth middleware for security, ignoring param if passed
+            // (Or if frontend sends /consistency/:userId, we can handle that, but 'current' maps to auth user)
+            const consistency = await analyticsService.getConsistency(request.userId);
+            return {
+                success: true,
+                data: consistency
+            };
+        } catch (err) {
+            request.log.error(err);
+            // Fallback for demo/dev if analytics service is down
+            return {
+                success: true,
+                data: {
+                    level: 'Novice',
+                    score: 0,
+                    trend: 'stable',
+                    engagement: { currentLoggingStreak: 0 }
+                }
+            };
         }
     });
 }

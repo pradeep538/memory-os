@@ -60,8 +60,13 @@ async function inputRoutes(fastify, options) {
                     type: 'object',
                     properties: {
                         success: { type: 'boolean' },
-                        memory: { type: 'object' },
-                        confirmation: { type: 'string' }
+                        data: {
+                            type: 'object',
+                            properties: {
+                                memory: { type: 'object' },
+                                confirmation: { type: 'string' }
+                            }
+                        }
                     }
                 }
             }
