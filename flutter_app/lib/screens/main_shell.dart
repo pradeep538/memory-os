@@ -100,7 +100,7 @@ class _MainShellState extends State<MainShell> {
               ),
 
               // Mic Hold-to-Talk button (center)
-              const MicFab(),
+              MicFab(isEnabled: _currentIndex != 2),
 
               // Profile tab
               _NavItem(

@@ -39,8 +39,52 @@ class _EngagementScreenState extends State<EngagementScreen>
   }
 
   Future<void> _loadData() async {
-    // TODO: Implement engagement service methods
-    setState(() => _isLoading = false);
+    debugPrint('EngagementScreen: _loadData called');
+    final appProvider = context.read<AppProvider>();
+    final user = appProvider.authService.currentUser;
+
+    if (user == null) {
+      debugPrint('EngagementScreen: User is null! Cannot fetch data.');
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    debugPrint('EngagementScreen: Fetching consistency for user ${user.uid}');
+    try {
+      final response =
+          await appProvider.analyticsService.getConsistencyScore(user.uid);
+      debugPrint(
+          'EngagementScreen: Response received. Success: ${response.success}');
+
+      if (!mounted) return;
+
+      if (response.success && response.data != null) {
+        debugPrint('EngagementScreen: Data found. Updating state.');
+        final summary = response.data!;
+
+        setState(() {
+          _summary = summary;
+
+          // Populate StreakData from summary
+          _streakData = StreakData(
+            name: 'Daily Logging',
+            currentStreak: summary.engagement.currentLoggingStreak,
+            longestStreak: summary.engagement.longestLoggingStreak,
+            isActive: summary.engagement.currentLoggingStreak > 0,
+            calendar: [], // Calendar data not available in simple summary yet
+          );
+
+          _isLoading = false;
+        });
+      } else {
+        debugPrint(
+            'EngagementScreen: Response failed or data null. Error: ${response.message}');
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      debugPrint('EngagementScreen: Error loading engagement data: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override

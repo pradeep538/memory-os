@@ -313,11 +313,55 @@ class InputController {
                 status: 'validated'
             });
 
+            // 5. Check for matching habits (NEW)
+            let habitConfirmation = '';
+            try {
+                // A. Check for Completion of EXISTING habits
+                const matchedHabit = await habitService.checkCompletionIntent(userId, enhanced_text);
+
+                if (matchedHabit) {
+                    await habitService.logCompletion(matchedHabit.id, userId, true, enhanced_text);
+                    habitConfirmation = `\n✓ Checked off habit: "${matchedHabit.habit_name}"`;
+                } else {
+                    // B. Check for Creation of NEW habits
+                    const newHabitData = await habitService.checkCreationIntent(userId, enhanced_text);
+                    if (newHabitData) {
+                        const createdHabit = await habitService.createHabit(userId, newHabitData);
+                        habitConfirmation = `\n✓ Created new habit: "${createdHabit.habit_name}" (${createdHabit.habit_type})`;
+                    }
+                }
+            } catch (hError) {
+                console.error('Habit check failed:', hError);
+            }
+
+            // 6. Update Action Plans (Context-Aware)
+            try {
+                // Dynamically import the service to avoid circular dependencies if any
+                const planProgressService = (await import('../../services/plans/planProgress.js')).default;
+                await planProgressService.updateProgress(memory);
+                console.log(`[InputController] Triggered plan progress update for memory ${memory.id}`);
+            } catch (planError) {
+                console.error('Plan update failed:', planError);
+            }
+
+            // 7. Publish Event
+            try {
+                await queue.send('memory.created', {
+                    userId,
+                    memoryId: memory.id,
+                    text: enhanced_text
+                });
+                console.log(`⚡ Event Published: memory.created for ${memory.id}`);
+            } catch (qErr) {
+                console.warn('Failed to publish memory.created:', qErr);
+            }
+
             reply.code(201).send({
                 success: true,
                 data: {
+                    success: true, // Frontend expects this nested structure?
                     memory,
-                    confirmation: `✓ Logged! ${enhanced_text}`
+                    confirmation: `✓ Logged! ${enhanced_text}${habitConfirmation}`
                 }
             });
         } catch (error) {
@@ -416,9 +460,13 @@ class InputController {
             const userTier = await voiceQuotaService.getUserTier(userId);
             const quotaStatus = await voiceQuotaService.getQuotaStatus(userId, userTier);
 
+            if (!quotaStatus) {
+                throw new Error('Failed to retrieve quota status');
+            }
+
             reply.send({
                 success: true,
-                quota: quotaStatus
+                data: quotaStatus
             });
         } catch (error) {
             request.log.error(error);

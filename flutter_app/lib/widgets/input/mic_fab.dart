@@ -3,13 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_colors.dart';
-import '../../config/app_typography.dart';
+
 import '../../providers/input_provider.dart';
 import 'package:vibration/vibration.dart';
 
 /// Hold-to-Talk Mic Button for bottom navigation
 class MicFab extends StatefulWidget {
-  const MicFab({super.key});
+  final bool isEnabled;
+
+  const MicFab({
+    super.key,
+    this.isEnabled = true,
+  });
 
   @override
   State<MicFab> createState() => _MicFabState();
@@ -46,7 +51,7 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
   }
 
   void _onTapDown(TapDownDetails details) {
-    if (_isHolding) return;
+    if (!widget.isEnabled || _isHolding) return;
     setState(() => _isHolding = true);
 
     // Feedback that we are waiting
@@ -91,7 +96,7 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
     _isInitializingRecording = true;
 
     // Vibrate FIRST to signal "Ready"
-    if (await Vibration.hasVibrator() ?? false) {
+    if (await Vibration.hasVibrator()) {
       Vibration.vibrate(duration: 100);
     } else {
       HapticFeedback.heavyImpact();
@@ -235,28 +240,33 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
                     height: 56,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      gradient: state == InputState.error
-                          ? LinearGradient(
-                              colors: [AppColors.error, AppColors.error],
+                      gradient: !widget.isEnabled
+                          ? const LinearGradient(
+                              colors: [Color(0xFFE2E8F0), Color(0xFFE2E8F0)],
                             )
-                          : state == InputState.success
+                          : state == InputState.error
                               ? LinearGradient(
-                                  colors: [
-                                    AppColors.success,
-                                    AppColors.success
-                                  ],
+                                  colors: [AppColors.error, AppColors.error],
                                 )
-                              : AppColors.primaryGradient,
+                              : state == InputState.success
+                                  ? LinearGradient(
+                                      colors: [
+                                        AppColors.success,
+                                        AppColors.success
+                                      ],
+                                    )
+                                  : AppColors.primaryGradient,
                       shape: BoxShape.circle,
                       boxShadow: [
-                        BoxShadow(
-                          color: (state == InputState.error
-                                  ? AppColors.error
-                                  : AppColors.primary)
-                              .withOpacity(0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
+                        if (widget.isEnabled)
+                          BoxShadow(
+                            color: (state == InputState.error
+                                    ? AppColors.error
+                                    : AppColors.primary)
+                                .withOpacity(0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
                       ],
                     ),
                     child: _buildIcon(state, inputProvider.activeSource),
@@ -271,6 +281,14 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildIcon(InputState state, InputSource? activeSource) {
+    if (!widget.isEnabled) {
+      return Icon(
+        Icons.mic_off_rounded,
+        color: AppColors.textTertiary.withOpacity(0.5),
+        size: 24,
+      );
+    }
+
     final isVoiceActive = activeSource == InputSource.voice;
 
     if (isVoiceActive &&

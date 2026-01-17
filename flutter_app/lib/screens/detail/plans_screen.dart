@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/plan_model.dart';
 import '../../services/plans_service.dart';
 import '../../services/api_client.dart';
+import '../../config/app_colors.dart';
 
 class PlansScreen extends StatefulWidget {
   const PlansScreen({Key? key}) : super(key: key);
@@ -35,9 +36,14 @@ class _PlansScreenState extends State<PlansScreen> {
   }
 
   Future<void> _generatePlan() async {
-    // Show dialog to pick category/goal
-    final result = await showDialog<Map<String, String>>(
+    // Show modal bottom sheet for better keyboard handling
+    final result = await showModalBottomSheet<Map<String, String>>(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (context) => _CreatePlanDialog(),
     );
 
@@ -69,19 +75,23 @@ class _PlansScreenState extends State<PlansScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Action Plans'),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        foregroundColor: AppColors.textPrimary,
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _generatePlan,
         label: const Text('New Plan'),
         icon: const Icon(Icons.add),
-        backgroundColor: const Color(0xFF06B6D4), // Cyan
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
           : _plans.isEmpty
               ? _EmptyState(onGenerate: _generatePlan)
               : ListView.builder(
@@ -104,7 +114,6 @@ class ActionPlanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // Determine current phase details
     // Current week is 1-based, phases list is 0-based
-    // Current week is 1-based, phases list is 0-based
     final phaseIndex = plan.phases.isEmpty
         ? 0
         : (plan.currentWeek - 1).clamp(0, plan.phases.length - 1);
@@ -125,9 +134,10 @@ class ActionPlanCard extends StatelessWidget {
         (plan.progress / (targetCount == 0 ? 1 : targetCount)).clamp(0.0, 1.0);
 
     return Card(
-      color: const Color(0xFF1E293B), // Slate 800
+      color: AppColors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -140,17 +150,28 @@ class ActionPlanCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     plan.title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ),
-                Chip(
-                  label: Text('Week ${plan.currentWeek}'),
-                  backgroundColor: const Color(0xFF0F172A),
-                  labelStyle: const TextStyle(color: Color(0xFF06B6D4)),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Week ${plan.currentWeek}',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -160,8 +181,7 @@ class ActionPlanCard extends StatelessWidget {
             if (currentPhase != null) ...[
               Text(
                 currentPhase.goal,
-                style: TextStyle(
-                    color: Colors.white.withOpacity(0.7), fontSize: 14),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
               ),
               const SizedBox(height: 16),
             ],
@@ -172,8 +192,8 @@ class ActionPlanCard extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: progressPercent,
                 minHeight: 12,
-                backgroundColor: Colors.white10,
-                color: const Color(0xFF06B6D4),
+                backgroundColor: AppColors.background,
+                color: AppColors.primary,
               ),
             ),
             const SizedBox(height: 8),
@@ -184,13 +204,14 @@ class ActionPlanCard extends StatelessWidget {
               children: [
                 Text(
                   '${plan.progress} / $targetCount sessions',
-                  style: const TextStyle(
-                      color: Colors.white70, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.bold),
                 ),
                 Text(
                   '${(progressPercent * 100).toInt()}%',
-                  style: const TextStyle(
-                      color: Color(0xFF06B6D4), fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: AppColors.primary, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -237,11 +258,11 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
   @override
   Widget build(BuildContext context) {
     bool isCustom = _selectedCategory == 'custom';
+    final keyboardPadding = MediaQuery.of(context).viewInsets.bottom;
 
-    return Dialog(
-      backgroundColor: const Color(0xFF1E293B), // Slate 800
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboardPadding),
+      child: Container(
         padding: const EdgeInsets.all(24.0),
         child: SingleChildScrollView(
           child: Form(
@@ -250,10 +271,23 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                Text(
                   'New Action Plan',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     fontFamily: 'Inter',
@@ -265,7 +299,7 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
                 const Text(
                   'DOMAIN',
                   style: TextStyle(
-                    color: Colors.white54,
+                    color: Colors.grey,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.0,
@@ -287,10 +321,11 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
                         setState(() => _selectedCategory = e.key);
                       },
                       checkmarkColor: Colors.white,
-                      selectedColor: const Color(0xFF06B6D4),
-                      backgroundColor: const Color(0xFF0F172A), // Darker slate
+                      selectedColor: AppColors.primary,
+                      backgroundColor: AppColors.background,
                       labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : Colors.white70,
+                        color:
+                            isSelected ? Colors.white : AppColors.textSecondary,
                         fontWeight:
                             isSelected ? FontWeight.bold : FontWeight.normal,
                         fontSize: 12,
@@ -302,7 +337,7 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
                           side: BorderSide(
                               color: isSelected
                                   ? Colors.transparent
-                                  : Colors.white10)),
+                                  : Colors.grey.withOpacity(0.2))),
                     );
                   }).toList(),
                 ),
@@ -312,7 +347,7 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _domainController,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: AppColors.textPrimary),
                     validator: (value) {
                       if (isCustom &&
                           (value == null || value.trim().length < 2)) {
@@ -322,18 +357,19 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
                     },
                     decoration: InputDecoration(
                       labelText: 'Specify Domain',
-                      labelStyle: const TextStyle(color: Colors.white54),
+                      labelStyle: TextStyle(color: AppColors.textSecondary),
                       hintText: 'e.g. Music, Art, Career',
-                      hintStyle: const TextStyle(color: Colors.white24),
+                      hintStyle: TextStyle(
+                          color: AppColors.textSecondary.withOpacity(0.5)),
                       filled: true,
-                      fillColor: const Color(0xFF0F172A),
+                      fillColor: AppColors.background,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF06B6D4)),
+                        borderSide: BorderSide(color: AppColors.primary),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 16),
@@ -347,7 +383,7 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
                 const Text(
                   'FREQUENCY',
                   style: TextStyle(
-                    color: Colors.white54,
+                    color: Colors.grey,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.0,
@@ -356,11 +392,11 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   value: _selectedFrequency,
-                  dropdownColor: const Color(0xFF1E293B), // Slate 800
-                  style: const TextStyle(color: Colors.white),
+                  dropdownColor: AppColors.surface,
+                  style: TextStyle(color: AppColors.textPrimary),
                   decoration: InputDecoration(
                     filled: true,
-                    fillColor: const Color(0xFF0F172A),
+                    fillColor: AppColors.background,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
@@ -384,7 +420,7 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
                 const Text(
                   'GOAL',
                   style: TextStyle(
-                    color: Colors.white54,
+                    color: Colors.grey,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.0,
@@ -395,7 +431,7 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
                   controller: _goalController,
                   autofocus:
                       !isCustom, // Autofocus only if not custom (avoids jumping)
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: AppColors.textPrimary),
                   validator: (value) {
                     if (value == null || value.trim().length < 3) {
                       return 'Please enter a specific goal';
@@ -406,16 +442,17 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
                   minLines: 1,
                   decoration: InputDecoration(
                     hintText: 'e.g., Run 5k, Save \$500',
-                    hintStyle: const TextStyle(color: Colors.white24),
+                    hintStyle: TextStyle(
+                        color: AppColors.textSecondary.withOpacity(0.5)),
                     filled: true,
-                    fillColor: const Color(0xFF0F172A),
+                    fillColor: AppColors.background,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF06B6D4)),
+                      borderSide: BorderSide(color: AppColors.primary),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 16),
@@ -430,7 +467,7 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
                         child: TextButton(
                       onPressed: () => Navigator.pop(context),
                       style: TextButton.styleFrom(
-                        foregroundColor: Colors.white60,
+                        foregroundColor: AppColors.textSecondary,
                       ),
                       child: const Text('Cancel'),
                     )),
@@ -452,7 +489,7 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF06B6D4),
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -482,24 +519,28 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.rocket_launch, size: 64, color: Colors.white24),
+          Icon(Icons.rocket_launch,
+              size: 64, color: AppColors.textSecondary.withOpacity(0.3)),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'No Active Plans',
             style: TextStyle(
-                color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                color: AppColors.textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Create a plan to start tracking\nyour goals scientifically.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white54),
+            style: TextStyle(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 24),
           ElevatedButton(
             onPressed: onGenerate,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF06B6D4),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
             ),
             child: const Text("Create First Plan"),

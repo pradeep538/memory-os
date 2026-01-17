@@ -1,4 +1,5 @@
 -- Recreate plans table with correct schema for Action Plans feature
+-- Includes adaptive scaling fields for science-based coaching
 DROP TABLE IF EXISTS plans CASCADE;
 
 CREATE TABLE plans (
@@ -11,6 +12,13 @@ CREATE TABLE plans (
     current_week INTEGER NOT NULL DEFAULT 1,
     progress INTEGER NOT NULL DEFAULT 0,
     status VARCHAR(20) NOT NULL DEFAULT 'active',
+    
+    -- Adaptive Scaling fields (Science-based coaching)
+    performance_history JSONB DEFAULT '[]'::jsonb,
+    consecutive_failures INTEGER DEFAULT 0,
+    difficulty_level FLOAT DEFAULT 1.0,
+    weeks_at_current_level INTEGER DEFAULT 0,
+    
     created_at TIMESTAMPTZ DEFAULT NOW(),
     last_updated_at TIMESTAMPTZ DEFAULT NOW()
 );

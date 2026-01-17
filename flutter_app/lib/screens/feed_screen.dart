@@ -49,6 +49,8 @@ class _FeedScreenState extends State<FeedScreen> {
     final inputProvider = context.read<InputProvider>();
     if (inputProvider.state == InputState.success) {
       _pollFeedback();
+      // Reload feed to update habits, score, memories
+      context.read<FeedProvider>().loadFeed();
     }
   }
 

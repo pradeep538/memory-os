@@ -15,8 +15,22 @@ import 'detail/entities_screen.dart';
 import 'detail/plans_screen.dart';
 
 /// Profile/Me screen - settings and subscription
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Fetch voice quota when screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<InputProvider>().fetchVoiceQuota();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -220,7 +234,25 @@ class ProfileScreen extends StatelessWidget {
               ],
               if (quota == null) ...[
                 const SizedBox(height: AppSpacing.md),
-                const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                if (inputProvider.voiceQuotaError != null)
+                  Center(
+                    child: Column(
+                      children: [
+                        Text(
+                          'Could not load quota',
+                          style: AppTypography.caption
+                              .copyWith(color: AppColors.error),
+                        ),
+                        TextButton(
+                          onPressed: () => inputProvider.fetchVoiceQuota(),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2)),
               ],
             ],
           ),

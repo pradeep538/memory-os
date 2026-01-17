@@ -3,6 +3,7 @@ import insightsService from '../intelligence/insightsService.js';
 import questionGeneratorService from '../intelligence/questionGeneratorService.js';
 import NotificationModel from '../../models/notification.model.js';
 import UserModel from '../../models/user.model.js';
+import planCoachingService from '../plans/planCoachingService.js';
 
 class SchedulerService {
     constructor() {
@@ -20,6 +21,9 @@ class SchedulerService {
 
         // Daily summary - Every day at 11 PM
         this.scheduleDailySummary();
+
+        // Daily Plan Coaching - Every day at 9 AM
+        this.schedulePlanCoaching();
 
         console.log('✅ Scheduled jobs started');
     }
@@ -73,6 +77,20 @@ class SchedulerService {
 
         this.jobs.push({ name: 'daily_summary', job });
         console.log('  ✓ Daily summary scheduled (11 PM)');
+    }
+
+    /**
+     * Plan Coaching - Every Hour (Heartbeat)
+     * Cron: '0 * * * *'
+     */
+    schedulePlanCoaching() {
+        // Run every hour at minute 0
+        const job = cron.schedule('0 * * * *', async () => {
+            await planCoachingService.checkAllPlans();
+        });
+
+        this.jobs.push({ name: 'plan_coaching', job });
+        console.log('  ✓ Plan coaching scheduled (Hourly Heartbeat)');
     }
 
     /**
@@ -173,6 +191,8 @@ class SchedulerService {
                 return await this.generateWeeklyInsightNotification(userId);
             case 'daily_summary':
                 return await this.generateDailySummaryNotification(userId);
+            case 'plan_coaching':
+                return await planCoachingService.checkAllPlans();
             default:
                 throw new Error(`Unknown job: ${jobName}`);
         }

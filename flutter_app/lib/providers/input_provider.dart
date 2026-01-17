@@ -329,15 +329,15 @@ class InputProvider extends ChangeNotifier {
 
       _retryCount = 0;
       final result = response.data!;
-      _voiceQuota = result.quota;
-
-      // Async success: We don't have the memory/text yet
-      // Just notify user it was uploaded
       debugPrint('Audio uploaded successfully: ${result.memoryId}');
       _lastFeedbackMessage = result.message;
       _audioResult = null; // No audio result immediately available
 
       _handleSuccess();
+
+      // Update quota immediately
+      fetchVoiceQuota();
+
       notifyListeners();
       return true;
     } catch (e) {
@@ -436,12 +436,27 @@ class InputProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  String? _voiceQuotaError;
+  String? get voiceQuotaError => _voiceQuotaError;
+
   /// Fetch voice quota
   Future<void> fetchVoiceQuota() async {
-    final response = await _inputService.getVoiceQuota();
-    if (response.success && response.data != null) {
-      _voiceQuota = response.data;
-      notifyListeners();
+    _voiceQuotaError = null;
+    notifyListeners(); // Clear error & show loader
+
+    try {
+      final response = await _inputService.getVoiceQuota();
+      if (response.success && response.data != null) {
+        _voiceQuota = response.data;
+        _voiceQuotaError = null;
+      } else {
+        debugPrint('Failed to fetch voice quota: ${response.error}');
+        _voiceQuotaError = response.error ?? 'Failed to load quota';
+      }
+    } catch (e) {
+      debugPrint('Exception fetching voice quota: $e');
+      _voiceQuotaError = 'Connection error';
     }
+    notifyListeners();
   }
 }

@@ -33,9 +33,11 @@ class Engagement {
 
     return Engagement(
       userId: json['user_id'] ?? json['userId'] ?? '',
+      // Debug print
+      // ignore: avoid_print
+      // print('Engagement Parsing: Stats inside? ${json.containsKey('stats')} Streak cached? ${json['streak']}');
       // Backend sends 'score', model expects 'engagementScore'
-      engagementScore:
-          json['score'] ??
+      engagementScore: json['score'] ??
           json['engagement_score'] ??
           json['engagementScore'] ??
           0,
@@ -43,27 +45,26 @@ class Engagement {
           json['engagement_trend'] ?? json['engagementTrend'] ?? 'stable',
       isAtRisk: json['is_at_risk'] ?? json['isAtRisk'] ?? false,
       // Backend sends nested streak object
-      currentLoggingStreak:
-          streak['current'] ??
+      currentLoggingStreak: streak['current'] ??
+          json['stats']?['current_streak'] ??
           json['current_logging_streak'] ??
           json['currentLoggingStreak'] ??
           0,
-      longestLoggingStreak:
-          streak['longest'] ??
+      longestLoggingStreak: streak['longest'] ??
           json['longest_logging_streak'] ??
           json['longestLoggingStreak'] ??
           0,
-      // Backend sends nested activity object
-      totalEvents:
-          activity['total_events'] ??
+      // Backend sends nested activity object or stats
+      totalEvents: activity['total_events'] ??
+          json['stats']?['events_30d'] ?? // Proxy for total if not available
           json['total_events'] ??
           json['totalEvents'] ??
           0,
       lastActivityDate: json['last_activity'] != null
           ? DateTime.parse(json['last_activity'])
           : (json['last_activity_date'] != null
-                ? DateTime.parse(json['last_activity_date'])
-                : null),
+              ? DateTime.parse(json['last_activity_date'])
+              : null),
       updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
           : null,
@@ -101,18 +102,29 @@ class EngagementSummary {
   });
 
   factory EngagementSummary.fromJson(Map<String, dynamic> json) {
+    // Debug print
+    // ignore: avoid_print
+    // print('EngagementSummary Parsing: Keys: ${json.keys.toList()}');
+    // ignore: avoid_print
+    // print('EngagementSummary Stats value: ${json['stats']}');
+
     return EngagementSummary(
       engagement: Engagement.fromJson(json['engagement'] ?? json),
       categoryBreakdown: Map<String, int>.from(
         json['category_breakdown'] ?? json['categoryBreakdown'] ?? {},
       ),
-      tips:
-          (json['tips'] as List?)
+      tips: (json['tips'] as List?)
               ?.map((e) => EngagementTip.fromJson(e))
               .toList() ??
           [],
-      todayEvents: json['today_events'] ?? json['todayEvents'] ?? 0,
-      weekEvents: json['week_events'] ?? json['weekEvents'] ?? 0,
+      // Map from backend stats
+      todayEvents: json['today_events'] ??
+          json['todayEvents'] ??
+          (json['stats']?['days_since_last'] == 0 ? 1 : 0),
+      weekEvents: json['week_events'] ??
+          json['weekEvents'] ??
+          json['stats']?['events_7d'] ??
+          0,
     );
   }
 
@@ -158,16 +170,14 @@ class EngagementAnalytics {
 
   factory EngagementAnalytics.fromJson(Map<String, dynamic> json) {
     return EngagementAnalytics(
-      dailyData:
-          (json['daily_data'] ?? json['dailyData'] as List?)
+      dailyData: (json['daily_data'] ?? json['dailyData'] as List?)
               ?.map((e) => DailyEngagement.fromJson(e))
               .toList() ??
           [],
       averageScore: json['average_score'] ?? json['averageScore'] ?? 0,
       peakScore: json['peak_score'] ?? json['peakScore'] ?? 0,
-      peakDate: json['peak_date'] != null
-          ? DateTime.parse(json['peak_date'])
-          : null,
+      peakDate:
+          json['peak_date'] != null ? DateTime.parse(json['peak_date']) : null,
     );
   }
 }
@@ -216,8 +226,7 @@ class StreakData {
       name: json['name'] ?? 'Logging',
       currentStreak: json['current_streak'] ?? json['currentStreak'] ?? 0,
       longestStreak: json['longest_streak'] ?? json['longestStreak'] ?? 0,
-      calendar:
-          (json['calendar'] as List?)
+      calendar: (json['calendar'] as List?)
               ?.map((e) => StreakDay.fromJson(e))
               .toList() ??
           [],
@@ -264,13 +273,11 @@ class MilestonesData {
 
   factory MilestonesData.fromJson(Map<String, dynamic> json) {
     return MilestonesData(
-      achieved:
-          (json['achieved'] as List?)
+      achieved: (json['achieved'] as List?)
               ?.map((e) => Milestone.fromJson(e))
               .toList() ??
           [],
-      upcoming:
-          (json['upcoming'] as List?)
+      upcoming: (json['upcoming'] as List?)
               ?.map((e) => Milestone.fromJson(e))
               .toList() ??
           [],

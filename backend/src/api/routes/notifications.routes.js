@@ -53,6 +53,23 @@ async function notificationsRoutes(fastify, options) {
             }
         }
     }, notificationsController.triggerJob.bind(notificationsController));
+
+    // Register FCM token
+    fastify.post('/register-token', {
+        preHandler: auth.authenticate,
+        schema: {
+            description: 'Register FCM token for push notifications',
+            tags: ['notifications'],
+            body: {
+                type: 'object',
+                required: ['fcm_token'],
+                properties: {
+                    fcm_token: { type: 'string' },
+                    device_info: { type: 'object' }
+                }
+            }
+        }
+    }, notificationsController.registerToken.bind(notificationsController));
 }
 
 export default notificationsRoutes;

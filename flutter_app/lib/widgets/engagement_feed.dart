@@ -5,7 +5,7 @@ class EngagementFeed extends StatefulWidget {
   final EngagementService engagementService;
 
   const EngagementFeed({Key? key, required this.engagementService})
-    : super(key: key);
+      : super(key: key);
 
   @override
   State<EngagementFeed> createState() => _EngagementFeedState();
@@ -19,6 +19,12 @@ class _EngagementFeedState extends State<EngagementFeed> {
   void initState() {
     super.initState();
     _loadFeed();
+  }
+
+  @override
+  void didUpdateWidget(EngagementFeed oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reload if parent tells us to (though FeedProvider is better source of truth)
   }
 
   Future<void> _loadFeed() async {
@@ -54,9 +60,9 @@ class _EngagementFeedState extends State<EngagementFeed> {
           child: Text(
             'Daily Brief',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
           ),
         ),
         ListView.builder(

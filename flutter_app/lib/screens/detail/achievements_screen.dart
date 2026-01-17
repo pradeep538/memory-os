@@ -251,7 +251,7 @@ class _AchievementsScreenState extends State<AchievementsScreen>
         headerSliverBuilder: (context, innerBoxIsScrolled) {
           return [
             SliverAppBar(
-              expandedHeight: 200,
+              expandedHeight: 280,
               pinned: true,
               backgroundColor: AppColors.primary,
               foregroundColor: AppColors.textOnPrimary,
@@ -282,7 +282,9 @@ class _AchievementsScreenState extends State<AchievementsScreen>
                     _achievements.where((a) => a.unlocked).toList(),
                   ),
                   _buildAchievementsList(
-                    _achievements.where((a) => !a.unlocked && a.progress > 0).toList(),
+                    _achievements
+                        .where((a) => !a.unlocked && a.progress > 0)
+                        .toList(),
                   ),
                 ],
               ),
@@ -480,9 +482,8 @@ class _AchievementCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: AppSpacing.md),
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: achievement.unlocked
-              ? AppColors.primaryLight
-              : AppColors.surface,
+          color:
+              achievement.unlocked ? AppColors.primaryLight : AppColors.surface,
           borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
           border: Border.all(
             color: achievement.unlocked

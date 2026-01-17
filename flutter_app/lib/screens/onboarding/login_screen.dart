@@ -5,14 +5,14 @@ import '../../config/app_spacing.dart';
 import '../../services/auth_service.dart';
 import 'phone_dialogs.dart';
 
-class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _LoginScreenState extends State<LoginScreen> {
   final AuthService _authService = AuthService();
   bool _isLoading = false;
   String? _error;

@@ -46,18 +46,25 @@ export default async function (fastify, opts) {
     });
 
     // GET /api/v1/engagement/consistency (Proxy to Analytics Service)
-    // Note: Frontend calls this to populate the Engagement Widget
     fastify.get('/consistency', async (request, reply) => {
         try {
-            // Using request.userId from auth middleware for security, ignoring param if passed
-            // (Or if frontend sends /consistency/:userId, we can handle that, but 'current' maps to auth user)
+            console.log(`[Proxy] Fetching consistency for ${request.userId}...`);
             const consistency = await analyticsService.getConsistency(request.userId);
-            return {
-                success: true,
-                data: consistency
-            };
+            console.log(`[Proxy] Consistency Result:`, JSON.stringify(consistency));
+
+            // Analytics service returns { success: true, data: { ... } }
+            // We should strip the wrapper or just return consistency directly to avoid double wrapping
+            if (consistency && consistency.success && consistency.data) {
+                return {
+                    success: true,
+                    data: consistency.data
+                };
+            }
+
+            // Fallback if structure is different
+            return consistency;
         } catch (err) {
-            request.log.error(err);
+            console.error('[Proxy] Consistency Fetch Failed:', err.message);
             // Fallback for demo/dev if analytics service is down
             return {
                 success: true,

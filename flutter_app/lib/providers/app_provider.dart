@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import '../services/services.dart';
 import '../services/auth_service.dart';
+import '../services/fcm_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Main app provider - manages services and global state
 class AppProvider extends ChangeNotifier {
@@ -41,7 +43,34 @@ class AppProvider extends ChangeNotifier {
     notificationsService = NotificationsService(_apiClient);
     queryService = QueryService(_apiClient);
     entityService = EntityService(_apiClient);
+
+    // Listen to auth changes for FCM registration
+    authService.authStateChanges.listen((user) {
+      if (user != null) {
+        FcmService.registerDeviceToken();
+      }
+    });
+
+    // Check onboarding status
+    _checkOnboardingStatus();
+
     _isInitialized = true;
+    notifyListeners();
+  }
+
+  bool _isOnboardingCompleted = false;
+  bool get isOnboardingCompleted => _isOnboardingCompleted;
+
+  Future<void> _checkOnboardingStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    _isOnboardingCompleted = prefs.getBool('onboarding_completed') ?? false;
+    notifyListeners();
+  }
+
+  Future<void> completeOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_completed', true);
+    _isOnboardingCompleted = true;
     notifyListeners();
   }
 

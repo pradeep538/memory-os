@@ -8,6 +8,17 @@ import 'services/services.dart';
 import 'auth_wrapper.dart';
 import 'firebase_options.dart';
 
+import 'services/fcm_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // If you're going to use other Firebase services in the background, such as Firestore,
+  // make sure you call `Firebase.initializeApp()` before using other Firebase services.
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  print("Handling a background message: ${message.messageId}");
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -15,9 +26,17 @@ void main() async {
     statusBarIconBrightness: Brightness.dark, // Dark icons for light background
     statusBarBrightness: Brightness.light, // For iOS (light = dark icons)
   ));
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Set the background handler before any other FCM initialization
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // Initialize FCM service (permissions, foreground listeners, token registration)
+  await FcmService.initialize();
+
   runApp(const KairoApp());
 }
 

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../config/app_colors.dart';
-import '../config/app_typography.dart';
-import '../config/app_spacing.dart';
+import '../../config/app_colors.dart';
+import '../../config/app_typography.dart';
+import '../../config/app_spacing.dart';
 
 /// Onboarding data model
 class OnboardingPage {
@@ -20,16 +20,16 @@ class OnboardingPage {
 }
 
 /// Onboarding Screen - 3-slide introduction for new users
-class OnboardingScreen extends StatefulWidget {
+class IntroScreen extends StatefulWidget {
   final VoidCallback onComplete;
 
-  const OnboardingScreen({super.key, required this.onComplete});
+  const IntroScreen({super.key, required this.onComplete});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  State<IntroScreen> createState() => _IntroScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _IntroScreenState extends State<IntroScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 

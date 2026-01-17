@@ -74,8 +74,12 @@ class VoiceQuotaService {
      * Get quota status for user
      */
     async getQuotaStatus(userId, tier = 'free') {
+        console.log(`[VoiceQuotaService] getQuotaStatus for ${userId} (${tier})`);
         const quota = getQuotaForTier(tier);
+        console.log(`[VoiceQuotaService] Quota object:`, quota);
+
         const used = await this.getTodayUsage(userId);
+        console.log(`[VoiceQuotaService] Used: ${used}`);
 
         if (quota.daily_limit === null) {
             return {

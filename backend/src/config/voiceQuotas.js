@@ -11,7 +11,7 @@ export const VOICE_QUOTAS = {
         overage_allowed: false
     },
     pro: {
-        daily_limit: 30,
+        daily_limit: 100,
         reset_interval: 'daily',
         overage_allowed: false
     },

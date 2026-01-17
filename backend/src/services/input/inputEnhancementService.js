@@ -99,7 +99,7 @@ Your task:
 Respond ONLY with valid JSON in this exact format:
 {
   "enhanced_text": "Complete, grammatically correct sentence",
-  "detected_category": "fitness|finance|routine|health|mindfulness|generic",
+  "detected_category": "fitness (e.g. gym, workout, running) | finance | routine | health | mindfulness | generic",
   "detected_entities": {
     "duration_minutes": number or null,
     "amount": number or null,

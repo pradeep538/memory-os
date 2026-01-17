@@ -118,7 +118,7 @@ async function inputRoutes(fastify, options) {
                     type: 'object',
                     properties: {
                         success: { type: 'boolean' },
-                        quota: {
+                        data: {
                             type: 'object',
                             properties: {
                                 tier: { type: 'string' },

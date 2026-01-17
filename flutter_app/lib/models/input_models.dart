@@ -132,13 +132,28 @@ class VoiceQuota {
   });
 
   factory VoiceQuota.fromJson(Map<String, dynamic> json) {
+    // Helper for safe int parsing
+    int safeInt(dynamic val, [int def = 0]) {
+      if (val == null) return def;
+      if (val is int) return val;
+      if (val is num) return val.toInt();
+      if (val is String) {
+        if (val == 'unlimited') return -1;
+        return int.tryParse(val) ?? def;
+      }
+      return def;
+    }
+
     return VoiceQuota(
-      used: json['used'] ?? 0,
-      remaining: json['remaining'] ?? 0,
-      limit: json['limit'] ?? 3,
+      used: safeInt(json['used'] ?? json['used_count']),
+      remaining: safeInt(json['remaining']),
+      limit: safeInt(json['limit'], 3),
       tier: json['tier'] ?? 'free',
-      resetsAt:
-          json['resets_at'] != null ? DateTime.parse(json['resets_at']) : null,
+      resetsAt: json['resets_at'] != null
+          ? DateTime.tryParse(json['resets_at'])
+          : (json['resetsAt'] != null
+              ? DateTime.tryParse(json['resetsAt'])
+              : null),
     );
   }
 

@@ -101,7 +101,6 @@ CREATE TABLE patterns (
 CREATE INDEX idx_patterns_user_category ON patterns(user_id, category);
 
 -- 5. Plans (Intelligent recommendations)
--- 5. Plans (Intelligent recommendations)
 CREATE TABLE plans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -112,11 +111,19 @@ CREATE TABLE plans (
     current_week INTEGER NOT NULL DEFAULT 1,
     progress INTEGER NOT NULL DEFAULT 0,
     status VARCHAR(20) NOT NULL DEFAULT 'active',
+    
+    -- Adaptive Scaling fields (Science-based coaching)
+    performance_history JSONB DEFAULT '[]'::jsonb,
+    consecutive_failures INTEGER DEFAULT 0,
+    difficulty_level FLOAT DEFAULT 1.0,
+    weeks_at_current_level INTEGER DEFAULT 0,
+    
     created_at TIMESTAMPTZ DEFAULT NOW(),
     last_updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_plans_user_status ON plans(user_id, status);
+
 
 -- 6. Sessions (Guided sessions)
 CREATE TABLE sessions (
@@ -621,3 +628,14 @@ CREATE TABLE identity_progress (
     reason TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Push Notifications (FCM Tokens)
+CREATE TABLE user_fcm_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token TEXT UNIQUE NOT NULL,
+    device_info JSONB DEFAULT '{}',
+    last_updated TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_fcm_tokens_user_id ON user_fcm_tokens(user_id);

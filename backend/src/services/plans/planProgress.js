@@ -1,4 +1,5 @@
 import { query } from '../../db/index.js';
+import NotificationModel from '../../models/notification.model.js';
 
 class PlanProgressService {
     /**
@@ -6,44 +7,51 @@ class PlanProgressService {
      * @param {Object} memory - The new memory object
      */
     async updateProgress(memory) {
-        const { userId, category, eventType } = memory;
+        // Handle both camelCase (app) and snake_case (db) keys
+        const userId = memory.userId || memory.user_id;
+        const category = memory.category;
+
+        if (!userId) {
+            console.error('[PlanProgress] Error: User ID is missing from memory object:', memory);
+            return;
+        }
 
         console.log(`[PlanProgress] Checking updates for user ${userId} in category ${category}`);
 
         // 1. Find active plans for this user and category
-        // TODO: Could also match by 'goal' keywords vs memory content if needed
-        const activePlans = await query(`
+        const activePlansResult = await query(`
             SELECT * FROM plans 
             WHERE user_id = $1 
               AND category = $2 
               AND status = 'active'
         `, [userId, category]);
 
+        const activePlans = activePlansResult.rows;
+
         if (activePlans.length === 0) {
-            console.log('[PlanProgress] No active plans found.');
+            console.log(`[PlanProgress] No plans match category "${category}".`);
             return;
         }
 
         // 2. Update progress for each relevant plan
         for (const plan of activePlans) {
-            // Check if memory matches plan goal (heuristic)
-            // For MVP, if categories match, we count it as progress towards the weekly goal (frequency)
-
-            // Get current phase info (simplified)
-            // In a real system, we'd parse 'plan.plan_data.phases' which is a JSONB array.
-            // But we don't have easy JSON access inside the Loop without parsing. 
-            // We'll trust the plan object from PG (node-postgres parses JSONB automatically).
-
+            // Get current phase info
             const phases = plan.plan_data.phases || [];
             const currentWeekIdx = (plan.current_week || 1) - 1;
             const currentPhase = phases[currentWeekIdx] || phases[0];
 
             if (!currentPhase) continue;
 
-            // TODO: Match specific 'target' (e.g. 'run') vs memory.rawInput
-            // For now, assume category match is sufficient for progress.
-
             const newProgress = (plan.progress || 0) + 1;
+
+            // Determine Target (Frequency)
+            let target = 3; // Default
+            if (currentPhase.frequency) target = currentPhase.frequency;
+            else if (currentPhase.target && typeof currentPhase.target === 'number') target = currentPhase.target;
+            else if (currentPhase.target && typeof currentPhase.target === 'string') {
+                const match = currentPhase.target.match(/\d+/);
+                if (match) target = parseInt(match[0]);
+            }
 
             // Update DB
             await query(`
@@ -55,8 +63,49 @@ class PlanProgressService {
 
             console.log(`[PlanProgress] Updated plan "${plan.plan_name}" progress to ${newProgress}`);
 
-            // Check if goal reached (Optional for MVP notification)
-            // if (newProgress >= currentPhase.frequency) ...
+            // 3. Send Immediate Feedback Notification
+            await this.sendFeedbackNotification(userId, plan, newProgress, target);
+        }
+    }
+
+    /**
+     * Send feedback notification
+     */
+    async sendFeedbackNotification(userId, plan, current, target) {
+        try {
+            let title = 'Plan Update';
+            let body = `Progress updated for ${plan.plan_name}.`;
+            let type = 'plan_update';
+
+            if (current >= target) {
+                // Goal Met!
+                title = '🎉 Weekly Goal Met!';
+                body = `You crushed your "${plan.plan_name}" goal for the week! (${current}/${target})`;
+                type = 'plan_goal_met';
+            } else {
+                // Encouragement
+                const remaining = target - current;
+                title = remaining === 1 ? 'Almost there! 🤏' : 'Great job! 👏';
+                body = `You completed ${current}/${target} sessions for "${plan.plan_name}". Keep going!`;
+            }
+
+            await NotificationModel.create({
+                userId,
+                notificationType: type,
+                title,
+                body,
+                scheduledFor: new Date(),
+                relatedPlanId: plan.id,
+                metadata: {
+                    progress: current,
+                    target: target,
+                    plan_name: plan.plan_name
+                }
+            });
+
+            console.log(`[PlanProgress] Sent notification: "${body}"`);
+        } catch (error) {
+            console.error('[PlanProgress] Failed to send notification:', error);
         }
     }
 }

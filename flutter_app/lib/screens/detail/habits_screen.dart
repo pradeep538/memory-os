@@ -224,39 +224,40 @@ class _HabitCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              // Complete button (only for active habits)
+              // Complete button (active habits)
               if (habit.isActive)
-                GestureDetector(
-                  onTap: onComplete,
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withAlpha(25),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.primary, width: 2),
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      size: 16,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: AppColors.success,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_rounded,
-                    size: 16,
-                    color: AppColors.textOnPrimary,
-                  ),
-                ),
+                habit.isCompletedToday
+                    ? Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: AppColors.success,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.check_rounded,
+                          size: 16,
+                          color: AppColors.textOnPrimary,
+                        ),
+                      )
+                    : GestureDetector(
+                        onTap: onComplete,
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withAlpha(25),
+                            shape: BoxShape.circle,
+                            border:
+                                Border.all(color: AppColors.primary, width: 2),
+                          ),
+                          child: const Icon(
+                            Icons.check_rounded,
+                            size: 16,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
               const SizedBox(width: AppSpacing.md),
 
               // Category indicator

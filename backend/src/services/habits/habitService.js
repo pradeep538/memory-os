@@ -47,26 +47,44 @@ class HabitService {
             // 2. Simple fuzzy match first (optimization)
             const lowerText = text.toLowerCase();
             const directMatch = habits.find(h => lowerText.includes(h.habit_name.toLowerCase()));
-            if (directMatch) return directMatch;
+            if (directMatch) {
+                console.log(`✅ Direct habit match: ${directMatch.habit_name}`);
+                return directMatch;
+            }
+
+            // Keyword Heuristics (Manual Overrides for common issues)
+            if (lowerText.includes('gym') && habits.some(h => h.habit_name === 'Gym Workout')) {
+                console.log(`✅ Heuristic habit match: Gym Workout`);
+                return habits.find(h => h.habit_name === 'Gym Workout');
+            }
 
             // 3. LLM Match for complex cases
             const llmService = (await import('../understanding/llmService.js')).default;
 
+            // Map habits to name+category for better context
+            const habitContext = habits.map(h => ({ name: h.habit_name, category: h.category }));
+
             const prompt = `
 User Input: "${text}"
-Active Habits: ${JSON.stringify(habitNames)}
+Active Habits: ${JSON.stringify(habitContext)}
 
 Does the user input likely indicate they completed one of the active habits?
+(e.g., "I went to the gym" matches "Gym Workout", "Drank water" matches "Hydration")
+
 Return ONLY the exact habit name from the list, or "null" if no match.
 `;
 
+            console.log(`🤔 Asking LLM for habit match...`);
             const response = await llmService.generateStructuredResponse(prompt);
             const matchedName = response.trim().replace(/"/g, '');
+            console.log(`🤖 LLM Habit Response: "${matchedName}"`);
 
             if (matchedName && matchedName !== 'null' && habitNames.includes(matchedName)) {
+                console.log(`✅ LLM habit match: ${matchedName}`);
                 return habits.find(h => h.habit_name === matchedName);
             }
 
+            console.log('❌ No habit match found.');
             return null;
         } catch (error) {
             console.error('Check completion intent error:', error);
@@ -127,7 +145,33 @@ Respond ONLY with valid JSON.
      * Get user's habits
      */
     async getUserHabits(userId, status = 'active') {
-        return await HabitModel.findByUser(userId, status);
+        const habits = await HabitModel.findByUser(userId, status);
+
+        // Enrich with today's completion status
+        const today = new Date().toISOString().split('T')[0];
+
+        // Fetch all completions for today (we need a new Model method or raw query)
+        // Since we don't have a bulk fetch in Model yet, we can do it here or add it to Model.
+        // For efficiency, let's query completions for these habits.
+
+        // Optimizing: fetch all completions for user for TODAY
+        const db = (await import('../../db/index.js')).default;
+        const completionQuery = `
+            SELECT habit_id, completed 
+            FROM habit_completions 
+            WHERE user_id = $1 AND completion_date = $2
+        `;
+        const completionsResult = await db.query(completionQuery, [userId, today]);
+
+        const completedMap = new Map();
+        completionsResult.rows.forEach(c => {
+            if (c.completed) completedMap.set(c.habit_id, true);
+        });
+
+        return habits.map(h => ({
+            ...h,
+            is_completed_today: completedMap.has(h.id)
+        }));
     }
 
     /**

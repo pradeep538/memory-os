@@ -149,7 +149,7 @@ class _HabitRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isCompleted = habit.currentStreak > 0;
+    final isCompleted = habit.isCompletedToday;
     final categoryColor = AppColors.getCategoryColor(habit.category);
 
     return Padding(
@@ -202,7 +202,9 @@ class _HabitRow extends StatelessWidget {
               habit.habitName,
               style: AppTypography.body.copyWith(
                 decoration: isCompleted ? TextDecoration.lineThrough : null,
-                color: isCompleted ? AppColors.textTertiary : AppColors.textPrimary,
+                color: isCompleted
+                    ? AppColors.textTertiary
+                    : AppColors.textPrimary,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

@@ -15,6 +15,7 @@ class Habit {
   final List<int>? reminderDays;
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final bool isCompletedToday;
 
   Habit({
     required this.id,
@@ -32,6 +33,7 @@ class Habit {
     this.reminderDays,
     required this.createdAt,
     this.updatedAt,
+    this.isCompletedToday = false,
   });
 
   factory Habit.fromJson(Map<String, dynamic> json) {
@@ -49,7 +51,7 @@ class Habit {
       completionRate: json['completion_rate'] is String
           ? double.tryParse(json['completion_rate']) ?? 0.0
           : (json['completion_rate'] ?? json['completionRate'] ?? 0.0)
-                .toDouble(),
+              .toDouble(),
       reminderEnabled:
           json['reminder_enabled'] ?? json['reminderEnabled'] ?? false,
       reminderTime: json['reminder_time'] ?? json['reminderTime'],
@@ -62,6 +64,8 @@ class Habit {
       updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
           : null,
+      isCompletedToday:
+          json['is_completed_today'] ?? json['isCompletedToday'] ?? false,
     );
   }
 
@@ -95,13 +99,12 @@ class HabitProgress {
       habitId: json['habit_id'] ?? json['habitId'] ?? '',
       currentStreak: json['current_streak'] ?? json['currentStreak'] ?? 0,
       longestStreak: json['longest_streak'] ?? json['longestStreak'] ?? 0,
-      completionRate: (json['completion_rate'] ?? json['completionRate'] ?? 0.0)
-          .toDouble(),
+      completionRate:
+          (json['completion_rate'] ?? json['completionRate'] ?? 0.0).toDouble(),
       totalCompletions:
           json['total_completions'] ?? json['totalCompletions'] ?? 0,
       totalMissed: json['total_missed'] ?? json['totalMissed'] ?? 0,
-      history:
-          (json['history'] as List?)
+      history: (json['history'] as List?)
               ?.map((e) => HabitHistoryItem.fromJson(e))
               .toList() ??
           [],
@@ -184,8 +187,7 @@ class HabitSuggestion {
       reason: json['reason'] ?? '',
       suggestedFrequency:
           json['suggested_frequency'] ?? json['suggestedFrequency'] ?? 1,
-      suggestedFrequencyUnit:
-          json['suggested_frequency_unit'] ??
+      suggestedFrequencyUnit: json['suggested_frequency_unit'] ??
           json['suggestedFrequencyUnit'] ??
           'day',
     );

@@ -26,5 +26,8 @@ export default {
 
     // Computed properties
     get isDev() { return this.env === 'development' || this.env === 'test'; },
-    get isProd() { return this.env === 'production'; }
+    get isProd() { return this.env === 'production'; },
+
+    // Logic Configuration
+    stagnationThresholdDays: parseInt(process.env.STAGNATION_THRESHOLD_DAYS || '3')
 };

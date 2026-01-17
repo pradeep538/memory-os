@@ -1,4 +1,5 @@
 import schedulerService from '../../services/notifications/schedulerService.js';
+import fcmService from '../../services/notifications/fcmService.js';
 import NotificationModel from '../../models/notification.model.js';
 import PatternModel from '../../models/pattern.model.js';
 
@@ -11,7 +12,7 @@ class NotificationsController {
         try {
             const { limit } = request.query;
 
-            
+
             const userId = request.userId;
 
             const notifications = await NotificationModel.getRecentByUser(
@@ -41,7 +42,7 @@ class NotificationsController {
         try {
             const { id } = request.params;
 
-            
+
             const userId = request.userId;
 
             // Get notification
@@ -106,7 +107,7 @@ class NotificationsController {
         try {
             const { jobName } = request.params;
 
-            
+
             const userId = request.userId;
 
             const result = await schedulerService.runNow(jobName, userId);
@@ -115,6 +116,41 @@ class NotificationsController {
                 success: true,
                 data: result,
                 message: `Job '${jobName}' triggered successfully`
+            });
+        } catch (error) {
+            request.log.error(error);
+            reply.code(500).send({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Register FCM token for push notifications
+     * POST /api/v1/notifications/register-token
+     */
+    async registerToken(request, reply) {
+        try {
+            const { fcm_token, device_info } = request.body;
+            const userId = request.userId;
+
+            if (!fcm_token) {
+                return reply.code(400).send({
+                    success: false,
+                    error: 'FCM token is required'
+                });
+            }
+
+            const result = await fcmService.registerToken(userId, fcm_token, device_info);
+
+            reply.send({
+                success: true,
+                message: 'FCM token registered successfully',
+                data: {
+                    id: result.id,
+                    last_updated: result.last_updated
+                }
             });
         } catch (error) {
             request.log.error(error);
