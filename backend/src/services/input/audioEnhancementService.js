@@ -41,17 +41,39 @@ class AudioEnhancementService {
      */
     async enhanceFromAudio(audioBuffer, mimeType, duration) {
         console.log(`Processing audio: ${mimeType}, Size: ${(audioBuffer.length / 1024).toFixed(2)} KB, Duration: ${duration}s`);
+
+        if (!this.ai) {
+            console.error('❌ AudioExhancementService: No Gemini API Key configured.');
+            return {
+                success: false,
+                error: 'Missing Gemini API Key',
+                transcription: 'Audio processing unavailable (Missing Key)',
+                category: 'generic',
+                confidence: 0,
+                fallback: true
+            };
+        }
+
         let tempPath = null;
 
         try {
-            // Step 1: Check if file is small enough for inline data (Limit is 20MB, we use 10MB for safety)
-            const MAX_INLINE_SIZE = 10 * 1024 * 1024; // 10MB
-            const isSmallFile = audioBuffer.length < MAX_INLINE_SIZE;
+            // Step 1: Force Files API (Inline data is notoriously flaky for AAC/MP4 containers)
+            const MAX_INLINE_SIZE = 0; // Force upload
+            const isSmallFile = false; // audioBuffer.length < MAX_INLINE_SIZE;
 
             let response = null;
 
+            // Gemini API doesn't explicitly support audio/mp4, but supports audio/aac.
+            // Flutter sends audio/mp4 (AAC-LC). We remap specifically for the API call.
+            let apiMimeType = mimeType;
+            // if (mimeType === 'audio/mp4' || mimeType === 'audio/x-m4a') {
+            //     apiMimeType = 'audio/aac';
+            // }
+            // Add MP4/AAC file extension support
+            const extension = this.getExtension(mimeType);
+
             if (isSmallFile) {
-                console.log('File is small (<10MB), using inline processing...');
+                console.log(`File is small (<10MB), using inline processing as ${apiMimeType}...`);
                 const base64Audio = audioBuffer.toString('base64');
 
                 try {
@@ -65,7 +87,7 @@ class AudioEnhancementService {
                                     { text: prompt },
                                     {
                                         inlineData: {
-                                            mimeType: mimeType,
+                                            mimeType: apiMimeType,
                                             data: base64Audio
                                         }
                                     }
@@ -91,8 +113,10 @@ class AudioEnhancementService {
                 console.log('Uploading audio to Gemini Files API...');
                 const audioFile = await this.ai.files.upload({
                     file: tempPath,
-                    mimeType: mimeType,
-                    displayName: `voice_input_${Date.now()}`
+                    config: {
+                        mimeType: apiMimeType,
+                        displayName: `voice_input_${Date.now()}`
+                    }
                 });
 
                 console.log('Audio uploaded:', audioFile.uri);
@@ -118,7 +142,7 @@ class AudioEnhancementService {
                                         { text: prompt },
                                         {
                                             fileData: {
-                                                mimeType: audioFile.mimeType,
+                                                mimeType: apiMimeType,
                                                 fileUri: audioFile.uri
                                             }
                                         }
@@ -355,7 +379,10 @@ Now process the audio and respond ONLY with JSON.`;
             'audio/mpeg': 'mp3',
             'audio/wav': 'wav',
             'audio/ogg': 'ogg',
-            'audio/opus': 'opus'
+            'audio/opus': 'opus',
+            'audio/aac': 'aac',
+            'audio/mp4': 'm4a',
+            'audio/x-m4a': 'm4a'
         };
 
         return map[mimeType] || 'webm';

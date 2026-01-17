@@ -1,6 +1,7 @@
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
 
 /// WebSocket Service for Kairo Chat
 /// Handles real-time messaging with the backend
@@ -19,15 +20,23 @@ class WebSocketService {
 
   WebSocketService({
     required this.userId,
-    this.wsUrl = 'ws://localhost:3001/chat',
-  });
+    String? customUrl,
+  }) : wsUrl = customUrl ?? _getDefaultUrl();
+
+  static String _getDefaultUrl() {
+    if (Platform.isAndroid) {
+      return 'ws://localhost:3000/api/v1/ws/input'; // Android Emulator
+    }
+    return 'ws://localhost:3000/api/v1/ws/input'; // iOS Simulator / Web
+  }
 
   /// Connect to WebSocket server
   void connect() {
-    print('🚫 WebSocket disabled temporarily');
-    return;
+    // print('🚫 WebSocket disabled temporarily');
+    // return;
     try {
-      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+      final urlWithAuth = '$wsUrl?userId=$userId';
+      _channel = WebSocketChannel.connect(Uri.parse(urlWithAuth));
       _isConnected = true;
 
       print('✅ WebSocket connected');
@@ -90,7 +99,19 @@ class WebSocketService {
     print('📤 Sent: $text');
   }
 
-  /// Send voice message
+  /// Stream audio chunk (binary)
+  void streamAudioChunk(List<int> chunk) {
+    if (!_isConnected) return;
+    _channel!.sink.add(chunk);
+  }
+
+  /// signal end of audio stream
+  void endAudioStream() {
+    if (!_isConnected) return;
+    _channel!.sink.add(jsonEncode({'type': 'end'}));
+  }
+
+  /// Send voice message (Legacy / Fallback)
   void sendVoice(String base64Audio) {
     if (!_isConnected) {
       print('❌ Not connected');
@@ -106,7 +127,7 @@ class WebSocketService {
     });
 
     _channel!.sink.add(message);
-    print('📤 Sent voice message');
+    print('📤 Sent voice message (legacy)');
   }
 
   /// Send clarification response

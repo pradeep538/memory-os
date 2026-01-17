@@ -58,6 +58,15 @@ class FeedbackService {
             } catch (hErr) {
                 console.error('FeedbackService Habit Check Failed:', hErr);
             }
+
+            // NEW: CHECK PLAN PROGRESS
+            try {
+                const planProgressService = (await import('../plans/planProgress.js')).default;
+                await planProgressService.updateProgress(memory);
+                console.log(`✓ FeedbackService: Triggered plan update check for memory ${memory.id}`);
+            } catch (pErr) {
+                console.error('FeedbackService Plan Check Failed:', pErr);
+            }
         }
 
         // 2. Check Streak (Existing Logic)

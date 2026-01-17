@@ -29,7 +29,10 @@ class PlanProgressService {
         const activePlans = activePlansResult.rows;
 
         if (activePlans.length === 0) {
-            console.log(`[PlanProgress] No plans match category "${category}".`);
+            console.log(`[PlanProgress] No active plans match category "${category}" for user ${userId}.`);
+            // List what IS available for debugging
+            const allPlans = await query(`SELECT plan_name, category, status FROM plans WHERE user_id = $1`, [userId]);
+            console.log(`[PlanProgress] User's current plans:`, allPlans.rows.map(p => `${p.plan_name} (${p.category}) [${p.status}]`));
             return;
         }
 

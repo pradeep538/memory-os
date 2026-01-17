@@ -27,10 +27,13 @@ enum InputSource { text, voice }
 class InputProvider extends ChangeNotifier {
   final InputService _inputService;
   final AudioRecorder _audioRecorder = AudioRecorder();
-
   final MemoryService _memoryService;
+  // Make WebSocketService optional for now to avoid breaking if not passed immediately,
+  // but ideally required.
+  WebSocketService? _webSocketService;
 
-  InputProvider(this._inputService, this._memoryService);
+  InputProvider(this._inputService, this._memoryService,
+      [this._webSocketService]);
 
   InputState _state = InputState.idle;
   InputState get state => _state;
@@ -111,9 +114,54 @@ class InputProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Update WebSocketService (e.g. on auth change)
+  void updateWebSocketService(WebSocketService ws) {
+    _webSocketService = ws;
+    // Listen to WS messages
+    _webSocketService!.messageStream.listen(_handleWebSocketMessage);
+  }
+
+  void _handleWebSocketMessage(Map<String, dynamic> data) {
+    debugPrint('📩 WS Message Received: $data'); // DEBUG LOG
+
+    if (data['type'] == 'result' && data['success'] == true) {
+      debugPrint('✅ WS Success condition met');
+      final resultData = data['data'];
+      // Map to InputResult
+      final result = InputResult(
+        needsConfirmation: resultData['needs_confirmation'] ?? false,
+        rawInput: resultData['transcription'] ?? '',
+        enhancedText: resultData['enhanced_text'] ?? '',
+        detectedCategory: resultData['category'] ?? 'generic',
+        detectedEntities: {}, // TODO: parse if sent
+        confidenceScore: (resultData['confidence'] ?? 0.0).toDouble(),
+        shortResponse: resultData['confirmation_message'],
+      );
+
+      if (result.needsConfirmation) {
+        _updateState(InputState.confirming);
+        _pendingResult = result;
+      } else {
+        _lastMemory =
+            null; // We don't have full memory object yet from WS, or we construct minimal?
+        _lastFeedbackMessage = result.shortResponse ?? "Saved";
+        _pendingResult = null;
+        _handleSuccess();
+        syncPendingInputs();
+      }
+      notifyListeners();
+    } else if (data['type'] == 'error') {
+      _handleError(data['message'] ?? 'Processing failed');
+    } else if (data['type'] == 'status') {
+      debugPrint('📥 Received: ${data['status']}');
+    }
+  }
+
+  // ... existing members ...
+
   // --- Recording Management ---
 
-  /// Start recording session
+  /// Start recording session (Realtime or File)
   Future<bool> startRecording() async {
     try {
       if (!await _audioRecorder.hasPermission()) {
@@ -121,18 +169,51 @@ class InputProvider extends ChangeNotifier {
         return false;
       }
 
-      final tempDir = await getTemporaryDirectory();
-      _currentRecordingPath =
-          '${tempDir.path}/voice_input_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      // Check if WebSocket is available and connected for Realtime
+      if (_webSocketService != null) {
+        // && _webSocketService!.isConnected) {
+        // Force connect if needed?
+        if (!_webSocketService!.isConnected) _webSocketService!.connect();
 
-      await _audioRecorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 128000,
-          sampleRate: 44100,
-        ),
-        path: _currentRecordingPath!,
-      );
+        // Return stream
+        final stream = await _audioRecorder.startStream(
+          const RecordConfig(
+            encoder: AudioEncoder
+                .pcm16bits, // Stream supported! Backend will wrap in WAV header.
+            // Gemini supports: WAV, MP3, AAC, FLAC, OGG, OPUS, WEBM.
+            // Raw PCM via WS might need header?
+            // Or use AAC LC stream?
+            // flutter_sound/record stream is usually Uint8List.
+            // Let's use pcm16bits (raw) for simplicity if Gemini accepts raw with header or if we wrap it.
+            // Actually implementation plan used 'enhanceFromAudio' which expects simple buffer.
+            // Sending raw PCM chunks might require wav header reconstruction on backend or stream 'audio/l16'.
+            // Safest: opus or aac if supported by backend 'enhanceFromAudio' buffer concatenation.
+            // File concatenation of m4a/aac isn't trivial.
+            // pcm16bits is raw samples. Concatenating them on backend = valid PCM file (missing header).
+            // Backend can wrap in WAV header.
+            sampleRate: 16000,
+            numChannels: 1,
+          ),
+        );
+
+        stream.listen((data) {
+          _webSocketService!.streamAudioChunk(data);
+        });
+      } else {
+        // Fallback to File
+        final tempDir = await getTemporaryDirectory();
+        _currentRecordingPath =
+            '${tempDir.path}/voice_input_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+        await _audioRecorder.start(
+          const RecordConfig(
+            encoder: AudioEncoder.aacLc,
+            bitRate: 128000,
+            sampleRate: 44100,
+          ),
+          path: _currentRecordingPath!,
+        );
+      }
 
       _activeSource = InputSource.voice;
       _updateState(InputState.recording);
@@ -148,14 +229,26 @@ class InputProvider extends ChangeNotifier {
     }
   }
 
-  /// Stop recording and return file path
+  /// Stop recording and return file path (if file mode) or null (if stream mode)
   Future<File?> stopRecording() async {
     _stopAmplitudeMonitoring();
 
     if (_state != InputState.recording) return null;
 
     try {
-      final path = await _audioRecorder.stop();
+      final path =
+          await _audioRecorder.stop(); // Stops stream or file recording
+
+      if (_webSocketService != null) {
+        // Realtime mode: Signal end
+        _webSocketService!.endAudioStream();
+        _updateState(InputState.processing); // UI shows processing
+        notifyListeners();
+        // We expect WS message to transition to success
+        return null;
+      }
+
+      // Legacy File Mode
       _updateState(InputState.transcribing);
       notifyListeners();
 

@@ -109,7 +109,8 @@ fastify.addHook('preHandler', async (request, reply) => {
     if (request.url === '/health' ||
         request.url === '/api/v1' ||
         request.url.startsWith('/docs') ||
-        request.url.startsWith('/webhooks')) {
+        request.url.startsWith('/webhooks') ||
+        request.url.startsWith('/api/v1/ws')) {
         return;
     }
 
@@ -134,6 +135,10 @@ await fastify.register(messagingRoutes, { prefix: '/api/v1' });
 await fastify.register(engagementRoutes, { prefix: '/api/v1/engagement' });
 await fastify.register(configRoutes, { prefix: '/api/v1/config' });
 await fastify.register(routinesRoutes, { prefix: '/api/v1/routines' });
+
+// Realtime WebSocket Routes (NEW)
+await fastify.register((await import('@fastify/websocket')).default);
+await fastify.register((await import('./api/routes/realtime.routes.js')).default, { prefix: '/api/v1/ws' });
 
 // Error handler
 fastify.setErrorHandler((error, request, reply) => {

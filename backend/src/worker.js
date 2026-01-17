@@ -37,7 +37,7 @@ export async function startWorker() {
             }
 
             // Ensure Queue Exists (prevents "Queue does not exist" error)
-            await queue.createQueue(w.QUEUE_NAME);
+            // await queue.createQueue(w.QUEUE_NAME); // Removed in pg-boss v9 (auto-created)
 
             // Schedule if defined
             if (w.SCHEDULE) {

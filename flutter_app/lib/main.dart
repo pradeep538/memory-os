@@ -91,16 +91,23 @@ class KairoApp extends StatelessWidget {
         ChangeNotifierProxyProvider<AppProvider, InputProvider>(
           create: (_) {
             final client = ApiClient();
-            return InputProvider(InputService(client), MemoryService(client));
+            // TODO: Pass actual userId when available or update later
+            return InputProvider(InputService(client), MemoryService(client),
+                WebSocketService(userId: 'temp_user') // Will be updated
+                );
           },
           update: (_, appProvider, previous) {
-            if (!appProvider.isInitialized) {
-              final client = ApiClient();
-              return previous ??
-                  InputProvider(InputService(client), MemoryService(client));
+            final client = ApiClient();
+            final wsService = WebSocketService(
+                userId: appProvider.authService.userId ?? 'anonymous');
+
+            if (previous != null) {
+              previous.updateWebSocketService(wsService);
+              return previous;
             }
+
             return InputProvider(
-                appProvider.inputService, appProvider.memoryService);
+                InputService(client), MemoryService(client), wsService);
           },
         ),
       ],

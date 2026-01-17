@@ -66,8 +66,7 @@ class _VoiceInputBarState extends State<VoiceInputBar> {
     return Consumer<InputProvider>(
       builder: (context, inputProvider, _) {
         final state = inputProvider.state;
-        final isProcessing =
-            state == InputState.transcribing ||
+        final isProcessing = state == InputState.transcribing ||
             state == InputState.enhancing ||
             state == InputState.processing ||
             state == InputState.confirming;
@@ -254,7 +253,7 @@ class WaveformWidget extends StatefulWidget {
 }
 
 class _WaveformWidgetState extends State<WaveformWidget> {
-  final List<double> _history = List.filled(30, 0.0);
+  final List<double> _history = List.filled(30, 0.0, growable: true);
   StreamSubscription? _subscription;
 
   @override
@@ -349,8 +348,7 @@ class _SubmitButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isTextActive = activeSource == InputSource.text;
-    final isProcessing =
-        isTextActive &&
+    final isProcessing = isTextActive &&
         (state == InputState.processing ||
             state == InputState.transcribing ||
             state == InputState.enhancing ||
@@ -369,10 +367,10 @@ class _SubmitButton extends StatelessWidget {
           color: (isTextActive && state == InputState.success)
               ? AppColors.success
               : (isTextActive && state == InputState.error)
-              ? AppColors.error
-              : isEnabled
-              ? AppColors.primary
-              : AppColors.borderLight,
+                  ? AppColors.error
+                  : isEnabled
+                      ? AppColors.primary
+                      : AppColors.borderLight,
           shape: BoxShape.circle,
         ),
         child: _buildIcon(isTextActive),
@@ -406,10 +404,7 @@ class _SubmitButton extends StatelessWidget {
 
     return Icon(
       Icons.arrow_upward_rounded,
-      color:
-          state ==
-              InputState
-                  .recording // Dimmed during recording
+      color: state == InputState.recording // Dimmed during recording
           ? AppColors.textDisabled
           : const Color(0xFFFFFFFF),
       size: 22,
