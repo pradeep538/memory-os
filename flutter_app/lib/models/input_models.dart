@@ -47,6 +47,32 @@ class InputResult {
           json['confirmation_message'] ?? json['confirmationMessage'],
     );
   }
+
+  InputResult copyWith({
+    bool? needsConfirmation,
+    String? rawInput,
+    String? enhancedText,
+    String? detectedCategory,
+    Map<String, dynamic>? detectedEntities,
+    double? confidenceScore,
+    String? reasoning,
+    List<String>? suggestions,
+    Memory? memory,
+    String? shortResponse,
+  }) {
+    return InputResult(
+      needsConfirmation: needsConfirmation ?? this.needsConfirmation,
+      rawInput: rawInput ?? this.rawInput,
+      enhancedText: enhancedText ?? this.enhancedText,
+      detectedCategory: detectedCategory ?? this.detectedCategory,
+      detectedEntities: detectedEntities ?? this.detectedEntities,
+      confidenceScore: confidenceScore ?? this.confidenceScore,
+      reasoning: reasoning ?? this.reasoning,
+      suggestions: suggestions ?? this.suggestions,
+      memory: memory ?? this.memory,
+      shortResponse: shortResponse ?? this.shortResponse,
+    );
+  }
 }
 
 /// Confirmation result after user confirms input

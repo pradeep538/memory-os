@@ -63,7 +63,7 @@ class PlanModel {
 
         const values = [
             userId, name, durationWeeks,
-            phases, category
+            { phases }, category
         ];
 
         const result = await db.query(query, values);
@@ -93,10 +93,34 @@ class PlanModel {
      * @param {object} updates - { plan_name, goal, etc. }
      */
     static async update(planId, userId, updates) {
-        const allowedFields = ['plan_name', 'category', 'description'];
+        // Map frontend keys to DB columns
+        if (updates.name) {
+            updates.plan_name = updates.name;
+            delete updates.name;
+        }
+        if (updates.duration) {
+            updates.duration_weeks = updates.duration;
+            delete updates.duration;
+        }
+
+        const allowedFields = ['plan_name', 'category', 'description', 'duration_weeks']; // goal/phases are NOT columns
         const fields = [];
         const values = [];
         let idx = 1;
+
+        // Handle phases/goal -> plan_data mapping logic
+        let planDataUpdate = {};
+        if (updates.phases) {
+            // Unwrap phases if passed directly
+            planDataUpdate.phases = updates.phases;
+            delete updates.phases;
+            // We'll merge this into 'plan_data' column
+        }
+
+        // Remove virtual fields that aren't columns (goal, frequency, schedule are used to build phases in controller)
+        delete updates.goal;
+        delete updates.frequency;
+        delete updates.schedule;
 
         for (const [key, value] of Object.entries(updates)) {
             if (allowedFields.includes(key)) {
@@ -106,12 +130,19 @@ class PlanModel {
             }
         }
 
+        // If phases are present, we need to update plan_data
+        if (planDataUpdate.phases) {
+            fields.push(`plan_data = $${idx}`);
+            values.push({ phases: planDataUpdate.phases }); // Wrap in object
+            idx++;
+        }
+
         if (fields.length === 0) return null;
 
         values.push(planId, userId);
         const query = `
             UPDATE plans 
-            SET ${fields.join(', ')}
+            SET ${fields.join(', ')}, last_updated_at = NOW()
             WHERE id = $${idx} AND user_id = $${idx + 1}
             RETURNING *
         `;

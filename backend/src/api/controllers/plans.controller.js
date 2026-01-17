@@ -2,6 +2,7 @@ import PlanModel from '../../models/plan.model.js';
 import inputEnhancementService from '../../services/input/inputEnhancementService.js';
 
 class PlansController {
+    // Controller for managing user blueprints
     /**
      * Get active plans
      * GET /api/v1/plans
@@ -53,7 +54,12 @@ class PlansController {
                 }];
             }
 
+            // DEBUG: Log phases structure
+            console.log('Creating Plan with Phases:', JSON.stringify(planData.phases, null, 2));
+
             const newPlan = await PlanModel.create(planData);
+            console.log('Created Plan Result:', JSON.stringify(newPlan.plan_data, null, 2));
+
             return reply.code(201).send({ success: true, data: newPlan });
 
         } catch (error) {
@@ -71,6 +77,25 @@ class PlansController {
             const userId = request.userId;
             const { id } = request.params;
             const updates = request.body;
+
+            console.log(`[PlansController] Update Body for ${id}:`, JSON.stringify(updates, null, 2));
+
+            // Construct phases if flat fields are provided (same logic as create)
+            if (updates.frequency || updates.goal || updates.schedule_details) {
+                let scheduleArray = [];
+                if (updates.schedule_details) {
+                    scheduleArray = updates.schedule_details.split('|');
+                } else if (updates.schedule) { // Handle inconsistency if any
+                    scheduleArray = updates.schedule.split('|');
+                }
+
+                updates.phases = [{
+                    week: 1,
+                    goal: updates.goal,
+                    target: updates.frequency || 'Daily',
+                    schedule: scheduleArray
+                }];
+            }
 
             const updatedPlan = await PlanModel.update(id, userId, updates);
 

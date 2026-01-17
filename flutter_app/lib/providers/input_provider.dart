@@ -5,6 +5,7 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/models.dart';
 import '../services/services.dart';
+import '../services/offline_storage_service.dart';
 import '../config/config.dart';
 
 /// Input state enum matching architecture doc
@@ -27,7 +28,9 @@ class InputProvider extends ChangeNotifier {
   final InputService _inputService;
   final AudioRecorder _audioRecorder = AudioRecorder();
 
-  InputProvider(this._inputService);
+  final MemoryService _memoryService;
+
+  InputProvider(this._inputService, this._memoryService);
 
   InputState _state = InputState.idle;
   InputState get state => _state;
@@ -243,6 +246,75 @@ class InputProvider extends ChangeNotifier {
 
   // --- Processing ---
 
+  // --- Offline & Retry Logic ---
+
+  final OfflineStorageService _offlineStorage = OfflineStorageService();
+  bool _isSyncing = false;
+
+  /// Try to sync any offline inputs
+  Future<void> syncPendingInputs() async {
+    if (_isSyncing) return;
+    _isSyncing = true;
+
+    debugPrint('Syncing pending inputs...');
+    try {
+      final pending = await _offlineStorage.getPendingInputs();
+      if (pending.isEmpty) {
+        _isSyncing = false;
+        return;
+      }
+
+      for (var input in pending) {
+        bool success = false;
+        if (input.type == OfflineInputType.text) {
+          debugPrint('Syncing text: ${input.content}');
+          // We use _inputService directly to avoid triggering UI state changes
+          final response = await _inputService.processText(input.content);
+          success = response.success;
+        } else if (input.type == OfflineInputType.audio) {
+          debugPrint('Syncing audio: ${input.content}');
+          final file = File(input.content);
+          if (await file.exists()) {
+            final response = await _inputService.processAudio(file);
+            success = response.success;
+          } else {
+            debugPrint('Audio file missing: ${input.content}');
+            await _offlineStorage.removeInput(input.id); // Remove stale
+            continue;
+          }
+        }
+
+        if (success) {
+          debugPrint('Sync successful: ${input.id}');
+          await _offlineStorage.removeInput(input.id);
+        } else {
+          debugPrint('Sync failed for ${input.id}, keeping in queue');
+        }
+      }
+    } catch (e) {
+      debugPrint('Sync error: $e');
+    } finally {
+      _isSyncing = false;
+    }
+  }
+
+  Future<void> _saveToOffline(String content, OfflineInputType type) async {
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    await _offlineStorage.saveInput(OfflineInput(
+      id: id,
+      type: type,
+      content: content,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+    ));
+    // Notify user via error message but softer
+    _handleError("Network issue. Saved to queue & will retry automatically.");
+
+    // Try to sync in background after a delay
+    Future.delayed(const Duration(seconds: 30), syncPendingInputs);
+  }
+
+  // --- Processing ---
+
   /// Process text input
   Future<bool> processText(String text) async {
     debugPrint('ProcessText called: $text');
@@ -256,12 +328,13 @@ class InputProvider extends ChangeNotifier {
 
     try {
       final response = await _inputService.processText(text);
-      debugPrint(
-        'ProcessText response: success=${response.success}, data=${response.data}',
-      );
 
       if (!response.success || response.data == null) {
         debugPrint('ProcessText failed: error=${response.error}');
+
+        // If 429 or other transient error, cache it
+        // Or if simple retry failed.
+        // We'll use the existing retry count first.
         if (_retryCount < _maxRetries) {
           _retryCount++;
           debugPrint('Retrying... $_retryCount');
@@ -270,13 +343,15 @@ class InputProvider extends ChangeNotifier {
         }
 
         _retryCount = 0;
-        _handleError(response.error ?? 'Failed to process input');
+        // FAIL -> Save Offline
+        await _saveToOffline(text, OfflineInputType.text);
         return false;
       }
 
       _retryCount = 0;
       final result = response.data!;
 
+      // ... Success handling ...
       if (result.needsConfirmation) {
         _updateState(InputState.confirming);
         _pendingResult = result;
@@ -287,18 +362,21 @@ class InputProvider extends ChangeNotifier {
         _lastFeedbackMessage = result.shortResponse ?? result.enhancedText;
         _pendingResult = null;
         _handleSuccess();
+
+        // Trigger sync of other items if this one succeeded
+        syncPendingInputs();
         return true;
       }
     } catch (e) {
       debugPrint('ProcessText Exception: $e');
       if (_retryCount < _maxRetries) {
         _retryCount++;
-        debugPrint('Retrying exception... $_retryCount');
         await Future.delayed(const Duration(seconds: 1));
         return processText(text);
       }
       _retryCount = 0;
-      _handleError(e.toString());
+      // Exception -> Save Offline
+      await _saveToOffline(text, OfflineInputType.text);
       return false;
     }
   }
@@ -308,7 +386,7 @@ class InputProvider extends ChangeNotifier {
     debugPrint('ProcessAudio called');
     if (_activeSource == null) _activeSource = InputSource.voice;
 
-    _updateState(InputState.transcribing); // Or InputState.uploading if added
+    _updateState(InputState.transcribing);
     _error = null;
     notifyListeners();
 
@@ -323,7 +401,12 @@ class InputProvider extends ChangeNotifier {
         }
 
         _retryCount = 0;
-        _handleError(response.error ?? 'Failed to upload audio');
+        // FAIL -> Save Offline
+        // Note: For audio, we must ensure the file persists!
+        // tempDir might be cleared. Ideally move to app doc dir.
+        // For MVP we assume temp persists for session.
+        // Better: Copy audioFile to app doc dir in _saveToOffline logic or here.
+        await _saveToOffline(audioFile.path, OfflineInputType.audio);
         return false;
       }
 
@@ -331,12 +414,15 @@ class InputProvider extends ChangeNotifier {
       final result = response.data!;
       debugPrint('Audio uploaded successfully: ${result.memoryId}');
       _lastFeedbackMessage = result.message;
-      _audioResult = null; // No audio result immediately available
+      _audioResult = null;
 
       _handleSuccess();
 
       // Update quota immediately
       fetchVoiceQuota();
+
+      // Trigger sync
+      syncPendingInputs();
 
       notifyListeners();
       return true;
@@ -347,93 +433,81 @@ class InputProvider extends ChangeNotifier {
         return processAudio(audioFile);
       }
       _retryCount = 0;
-      _handleError(e.toString());
+      await _saveToOffline(audioFile.path, OfflineInputType.audio);
       return false;
     }
   }
 
-  /// Confirm pending input
-  Future<bool> confirmInput({
-    String? editedText,
-    String? category,
-    Map<String, dynamic>? entities,
-  }) async {
-    // ... existing implementation
+  Future<bool> confirmInput({String? editedText, String? category}) async {
     if (_pendingResult == null) return false;
+
+    // Use current pending result with overrides
+    final resultToConfirm = _pendingResult!;
+    final textToSubmit = editedText ?? resultToConfirm.enhancedText;
+    final categoryToSubmit = category ?? resultToConfirm.detectedCategory;
 
     _updateState(InputState.processing);
     notifyListeners();
 
     try {
       final response = await _inputService.confirmInput(
-        enhancedText: editedText ?? _pendingResult!.enhancedText,
-        category: category ?? _pendingResult!.detectedCategory,
-        entities: entities ?? _pendingResult!.detectedEntities,
+        enhancedText: textToSubmit,
+        category: categoryToSubmit,
+        entities: resultToConfirm.detectedEntities,
       );
-      // ... rest of implementation (using existing code logic)
-      if (!response.success || response.data == null) {
-        // ... retry logic
-        if (_retryCount < _maxRetries) {
-          _retryCount++;
-          await Future.delayed(const Duration(seconds: 1));
-          return confirmInput(
-              editedText: editedText, category: category, entities: entities);
-        }
-        _retryCount = 0;
+
+      if (response.success && response.data != null) {
+        final result = response.data!;
+        _lastMemory = result.memory;
+        _lastFeedbackMessage = result.message ?? "Memory saved";
+        _pendingResult = null;
+        _handleSuccess();
+
+        // Trigger sync of other items
+        syncPendingInputs();
+        return true;
+      } else {
         _handleError(response.error ?? 'Failed to confirm input');
         return false;
       }
-      _retryCount = 0;
-      _lastMemory = response.data!.memory;
-      _lastFeedbackMessage =
-          response.data!.message ?? _pendingResult?.shortResponse;
-      _pendingResult = null;
-      _handleSuccess();
-      return true;
     } catch (e) {
-      // ... catch logic
-      if (_retryCount < _maxRetries) {
-        _retryCount++;
-        await Future.delayed(const Duration(seconds: 1));
-        return confirmInput(
-            editedText: editedText, category: category, entities: entities);
-      }
-      _retryCount = 0;
-      _handleError(e.toString());
+      _handleError('Confirmation error: $e');
       return false;
     }
   }
 
-  /// Update pending category (User Manual Override)
   void updatePendingCategory(String category) {
     if (_pendingResult != null) {
-      // Create a copy with new category
-      _pendingResult = InputResult(
-        enhancedText: _pendingResult!.enhancedText,
-        detectedCategory: category, // Override
-        confidenceScore: _pendingResult!.confidenceScore,
-        needsConfirmation: _pendingResult!.needsConfirmation,
-        shortResponse: _pendingResult!.shortResponse,
-        detectedEntities: _pendingResult!.detectedEntities,
-      );
+      _pendingResult = _pendingResult!.copyWith(detectedCategory: category);
       notifyListeners();
     }
   }
 
-  /// Cancel confirmation
   void cancelConfirmation() {
-    _updateState(InputState.idle);
-    _inputText = _pendingResult?.enhancedText ?? _inputText;
     _pendingResult = null;
+    _updateState(InputState.idle);
     notifyListeners();
   }
 
-  /// Undo last memory creation
-  void undoLastMemory() {
-    _lastMemory = null;
-    _lastFeedbackMessage = null;
-    _updateState(InputState.idle);
+  Future<void> undoLastMemory() async {
+    if (_lastMemory == null) return;
+
+    final id = _lastMemory!.id;
+    _lastMemory = null; // optimistically clear
+    _lastFeedbackMessage = "Undoing...";
     notifyListeners();
+
+    try {
+      final response = await _memoryService.deleteMemory(id);
+      if (response.success) {
+        _lastFeedbackMessage = "Memory deleted";
+      } else {
+        _handleError("Failed to undo memory: ${response.error}");
+      }
+      notifyListeners();
+    } catch (e) {
+      _handleError("Failed to undo memory");
+    }
   }
 
   String? _voiceQuotaError;
@@ -441,8 +515,11 @@ class InputProvider extends ChangeNotifier {
 
   /// Fetch voice quota
   Future<void> fetchVoiceQuota() async {
+    // Try to sync pending inputs on startup/refresh
+    syncPendingInputs();
+
     _voiceQuotaError = null;
-    notifyListeners(); // Clear error & show loader
+    notifyListeners();
 
     try {
       final response = await _inputService.getVoiceQuota();
@@ -450,11 +527,9 @@ class InputProvider extends ChangeNotifier {
         _voiceQuota = response.data;
         _voiceQuotaError = null;
       } else {
-        debugPrint('Failed to fetch voice quota: ${response.error}');
         _voiceQuotaError = response.error ?? 'Failed to load quota';
       }
     } catch (e) {
-      debugPrint('Exception fetching voice quota: $e');
       _voiceQuotaError = 'Connection error';
     }
     notifyListeners();

@@ -50,13 +50,16 @@ class ActionPlan {
     }
 
     var phasesList = <PlanPhase>[];
-    // Check root phases, then plan_data phases
-    var phasesSource = json['phases'] ?? planData['phases'];
+    // Check plan_data phases first (primary), then root phases (fallback)
+    var phasesSource = planData['phases'] ?? json['phases'];
 
     if (phasesSource != null) {
+      print('PlanData Phases: $phasesSource');
       if (phasesSource is List) {
         phasesList = phasesSource.map((i) => PlanPhase.fromJson(i)).toList();
       }
+    } else {
+      print('Warning: No phases found in plan data');
     }
 
     return ActionPlan(

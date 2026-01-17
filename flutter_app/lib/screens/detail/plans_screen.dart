@@ -194,7 +194,8 @@ class _PlansScreenState extends State<PlansScreen> {
         // For now we just send what we have, though backend currently only updates description/name/category
         'plan_name': result['name'], // Explicit name
         'duration_weeks': int.parse(result['duration'] ?? '4'),
-        // We aren't updating schedule on edit yet, only creation for now
+        'frequency': result['frequency'],
+        'schedule': result['schedule'],
       });
 
       if (updatedPlan != null && mounted) {
@@ -1352,21 +1353,7 @@ class __CreatePlanDialogState extends State<_CreatePlanDialog> {
                           // Append schedule details
                           String goal = _goalController.text;
 
-                          // 1. Structured Multi-Time
-                          if (_scheduleControllers.isNotEmpty) {
-                            List<String> times = _scheduleControllers
-                                .map((c) => c.text.trim())
-                                .where((t) => t.isNotEmpty)
-                                .toList();
-                            if (times.isNotEmpty) {
-                              goal += " (${times.join(', ')})";
-                            }
-                          }
-                          // 2. Generic Single Note (Fallback)
-                          else if (_domainController.text.isNotEmpty &&
-                              !isCustom) {
-                            goal += " (${_domainController.text})";
-                          }
+                          // No longer appending times to goal string as we send 'schedule' separately
 
                           // Validate Time Slots
                           Set<String> uniqueTimes = {};

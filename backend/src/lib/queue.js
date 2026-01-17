@@ -5,7 +5,7 @@ dotenv.config();
 
 const queue = new PgBoss({
     connectionString: process.env.DATABASE_URL,
-    max: 10,
+    max: 50, // Increased for multiple workers
     application_name: 'memory-os-queue',
     // Connection Stability Settings
     connectionTimeoutMillis: 30000,

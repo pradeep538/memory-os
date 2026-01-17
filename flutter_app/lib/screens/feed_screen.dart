@@ -33,6 +33,8 @@ class _FeedScreenState extends State<FeedScreen> {
   UserFeedback? _latestFeedback;
   VoidCallback? _inputListener;
 
+  InputState _lastInputState = InputState.idle;
+
   @override
   void initState() {
     super.initState();
@@ -42,16 +44,22 @@ class _FeedScreenState extends State<FeedScreen> {
       // Listen to input provider for success events
       _inputListener = _onInputStateChange;
       context.read<InputProvider>().addListener(_inputListener!);
+      _lastInputState = context.read<InputProvider>().state;
     });
   }
 
   void _onInputStateChange() {
     final inputProvider = context.read<InputProvider>();
-    if (inputProvider.state == InputState.success) {
+    final currentState = inputProvider.state;
+
+    // Only act on transition to success
+    if (currentState == InputState.success &&
+        _lastInputState != InputState.success) {
       _pollFeedback();
       // Reload feed to update habits, score, memories
       context.read<FeedProvider>().loadFeed();
     }
+    _lastInputState = currentState;
   }
 
   Future<void> _pollFeedback() async {

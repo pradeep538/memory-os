@@ -242,12 +242,14 @@ class InputController {
                         }
                     }
                 } else {
-                    // Fallback to Category-based matching
-                    await planProgressService.updateProgress(updatedMemory);
-                    // Note: PlanProgressService handles its own notifications
+                    // Fallback to Category-based matching (Async - Fire & Forget)
+                    planProgressService.updateProgress(updatedMemory)
+                        .catch(err => console.error('[PlanProgress] Async update failed:', err));
+
+                    // We don't wait for confirmation string here to avoid blocking
                 }
             } catch (pErr) {
-                console.error('Plan update failed:', pErr);
+                console.error('Plan update mechanism failed:', pErr);
             }
 
             // Generate success message

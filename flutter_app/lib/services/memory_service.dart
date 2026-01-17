@@ -23,13 +23,15 @@ class MemoryService {
 
     if (category != null) queryParams['category'] = category;
     if (eventType != null) queryParams['eventType'] = eventType;
-    if (startDate != null) queryParams['startDate'] = startDate.toIso8601String();
+    if (startDate != null)
+      queryParams['startDate'] = startDate.toIso8601String();
     if (endDate != null) queryParams['endDate'] = endDate.toIso8601String();
 
     return _client.get<List<Memory>>(
       '/memory',
       queryParams: queryParams,
-      fromJson: (json) => (json as List).map((e) => Memory.fromJson(e)).toList(),
+      fromJson: (json) =>
+          (json as List).map((e) => Memory.fromJson(e)).toList(),
     );
   }
 
@@ -64,6 +66,14 @@ class MemoryService {
         if (entities != null) 'entities': entities,
       },
       fromJson: (json) => Memory.fromJson(json),
+    );
+  }
+
+  /// Delete memory by ID
+  Future<ApiResponse<void>> deleteMemory(String id) async {
+    return _client.delete<void>(
+      '/memory/$id',
+      fromJson: (_) {},
     );
   }
 }

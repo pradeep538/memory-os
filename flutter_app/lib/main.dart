@@ -89,11 +89,18 @@ class KairoApp extends StatelessWidget {
           },
         ),
         ChangeNotifierProxyProvider<AppProvider, InputProvider>(
-          create: (_) => InputProvider(InputService(ApiClient())),
+          create: (_) {
+            final client = ApiClient();
+            return InputProvider(InputService(client), MemoryService(client));
+          },
           update: (_, appProvider, previous) {
-            if (!appProvider.isInitialized)
-              return previous ?? InputProvider(InputService(ApiClient()));
-            return InputProvider(appProvider.inputService);
+            if (!appProvider.isInitialized) {
+              final client = ApiClient();
+              return previous ??
+                  InputProvider(InputService(client), MemoryService(client));
+            }
+            return InputProvider(
+                appProvider.inputService, appProvider.memoryService);
           },
         ),
       ],
