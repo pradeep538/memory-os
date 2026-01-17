@@ -221,12 +221,15 @@ class InputController {
                 console.error('Habit check failed:', hError);
             }
 
-            // Step 4.6: Update Action Plans (Context-Aware)
+            // Step 4.6: Update Action Plans (Deterministic Fallback)
             let planConfirmation = '';
-            if (enhancement.plan_updates && enhancement.plan_updates.length > 0) {
-                for (const update of enhancement.plan_updates) {
-                    if (update.is_fulfilled) {
-                        try {
+            try {
+                const planProgressService = (await import('../../services/plans/planProgress.js')).default;
+
+                if (enhancement.plan_updates && enhancement.plan_updates.length > 0) {
+                    // LLM provided explicit updates
+                    for (const update of enhancement.plan_updates) {
+                        if (update.is_fulfilled) {
                             const updatedPlan = await PlanModel.updateProgress(
                                 update.plan_id,
                                 update.progress_value || 1,
@@ -236,11 +239,15 @@ class InputController {
                             if (updatedPlan) {
                                 planConfirmation += `\n✓ Progress on plan: "${updatedPlan.plan_name}"`;
                             }
-                        } catch (pErr) {
-                            console.error('Failed to update plan progress:', pErr);
                         }
                     }
+                } else {
+                    // Fallback to Category-based matching
+                    await planProgressService.updateProgress(updatedMemory);
+                    // Note: PlanProgressService handles its own notifications
                 }
+            } catch (pErr) {
+                console.error('Plan update failed:', pErr);
             }
 
             // Generate success message
@@ -594,6 +601,50 @@ class InputController {
         }
     }
 
+    /**
+     * Transcribe audio (Architect Mode Support)
+     * POST /api/v1/input/transcribe
+     * Returns text ONLY, does not create memory.
+     */
+    async transcribeAudio(request, reply) {
+        try {
+            const data = await request.file();
+            if (!data) {
+                return reply.code(400).send({ success: false, error: 'No audio file' });
+            }
+
+            const audioBuffer = await data.toBuffer();
+
+            // Metadata defaults
+            const duration = parseInt(data.fields?.duration?.value || '6');
+            let mimeType = data.mimetype;
+            if (!mimeType || mimeType === 'application/octet-stream') {
+                if (data.filename && data.filename.endsWith('.m4a')) mimeType = 'audio/mp4';
+                else mimeType = 'audio/mp3';
+            }
+
+            const audioEnhancementService = (await import('../../services/input/audioEnhancementService.js')).default;
+            const result = await audioEnhancementService.enhanceFromAudio(audioBuffer, mimeType, duration);
+
+            if (!result.success) {
+                return reply.code(500).send({ success: false, error: result.error });
+            }
+
+            // Return transcription
+            reply.send({
+                success: true,
+                data: {
+                    text: result.enhanced_text || result.transcription
+                }
+            });
+
+        } catch (error) {
+            request.log.error(error);
+            reply.code(500).send({ success: false, error: error.message });
+        }
+    }
+
+
 
     getNextMidnight() {
         const tomorrow = new Date();
@@ -633,6 +684,44 @@ class InputController {
         });
 
         return memory;
+    }
+    /**
+     * Enhance a blueprint goal interactively
+     * POST /api/v1/input/enhance-goal
+     */
+    async enhanceGoal(request, reply) {
+        try {
+            const { goal } = request.body;
+
+            if (!goal || goal.trim().length < 3) {
+                return reply.code(400).send({
+                    success: false,
+                    error: 'Goal is too short to enhance'
+                });
+            }
+
+            const enhanced = await inputEnhancementService.enhanceBlueprintGoal(goal);
+
+            if (!enhanced) {
+                return reply.send({
+                    success: true,
+                    data: null,
+                    message: 'Could not enhance goal'
+                });
+            }
+
+            return reply.send({
+                success: true,
+                data: enhanced
+            });
+
+        } catch (error) {
+            request.log.error(error);
+            reply.code(500).send({
+                success: false,
+                error: error.message
+            });
+        }
     }
 }
 

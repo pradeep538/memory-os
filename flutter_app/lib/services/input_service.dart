@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'api_client.dart';
 import '../models/input_models.dart';
+import '../models/goal_enhancement_result.dart';
 
 /// Service for handling voice/text input processing
 class InputService {
@@ -45,11 +46,31 @@ class InputService {
     );
   }
 
+  /// Transcribe audio only (Architect Mode)
+  Future<ApiResponse<TranscriptionResult>> transcribeAudio(
+      File audioFile) async {
+    return _client.postMultipart<TranscriptionResult>(
+      '/input/transcribe',
+      file: audioFile,
+      fileField: 'audio',
+      fromJson: (json) => TranscriptionResult.fromJson(json),
+    );
+  }
+
   /// Get voice quota status
   Future<ApiResponse<VoiceQuota>> getVoiceQuota() async {
     return _client.get<VoiceQuota>(
       '/input/audio/quota',
       fromJson: (json) => VoiceQuota.fromJson(json),
+    );
+  }
+
+  /// Enhance a blueprint goal (Interactive)
+  Future<ApiResponse<GoalEnhancementResult>> enhanceGoal(String goal) async {
+    return _client.post<GoalEnhancementResult>(
+      '/input/enhance-goal',
+      body: {'goal': goal},
+      fromJson: (json) => GoalEnhancementResult.fromJson(json),
     );
   }
 }

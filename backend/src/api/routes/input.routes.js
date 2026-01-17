@@ -41,6 +41,36 @@ async function inputRoutes(fastify, options) {
         }
     }, inputController.processText.bind(inputController));
 
+    // Enhance Goal (Blueprint)
+    fastify.post('/enhance-goal', {
+        schema: {
+            description: 'Refine a blueprint goal using AI',
+            tags: ['input'],
+            body: {
+                type: 'object',
+                required: ['goal'],
+                properties: {
+                    goal: { type: 'string' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: {
+                            type: 'object',
+                            properties: {
+                                refined_goal: { type: 'string' },
+                                short_name: { type: 'string' }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }, inputController.enhanceGoal.bind(inputController));
+
     // Confirm low-confidence enhancement
     fastify.post('/confirm', {
         schema: {
@@ -107,6 +137,30 @@ async function inputRoutes(fastify, options) {
             }
         }
     }, inputController.processAudio.bind(inputController));
+
+    // Transcribe audio only (Architect Mode)
+    fastify.post('/transcribe', {
+        schema: {
+            description: 'Transcribe audio without creating memory',
+            tags: ['input', 'audio'],
+            consumes: ['multipart/form-data'],
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: {
+                            type: 'object',
+                            properties: {
+                                text: { type: 'string' }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }, inputController.transcribeAudio.bind(inputController));
+
 
     // Get voice quota status
     fastify.get('/audio/quota', {

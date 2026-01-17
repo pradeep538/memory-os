@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class ActionPlan {
   final String id;
   final String title;
@@ -28,7 +30,11 @@ class ActionPlan {
     Map<String, dynamic> planData = {};
     if (json['plan_data'] != null) {
       if (json['plan_data'] is String) {
-        // Handle stringified JSON if necessary (though usually handled by Dio/http)
+        try {
+          planData = jsonDecode(json['plan_data']) as Map<String, dynamic>;
+        } catch (e) {
+          print('Error parsing plan_data string: $e');
+        }
       } else if (json['plan_data'] is Map) {
         planData = json['plan_data'] as Map<String, dynamic>;
       }
@@ -70,24 +76,35 @@ class ActionPlan {
               : null),
     );
   }
+
+  // Helper to interpret frequency from phases
+  String get frequency => phases.isNotEmpty ? phases.first.target : 'Daily';
 }
 
 class PlanPhase {
   final int week;
   final String goal;
   final String target; // e.g. "3x/week"
+  final List<String>? schedule; // e.g. ["08:00", "20:00"]
 
   PlanPhase({
     required this.week,
     required this.goal,
     required this.target,
+    this.schedule,
   });
 
   factory PlanPhase.fromJson(Map<String, dynamic> json) {
+    List<String>? parsedSchedule;
+    if (json['schedule'] != null) {
+      parsedSchedule = List<String>.from(json['schedule']);
+    }
+
     return PlanPhase(
       week: json['week'] ?? 1,
       goal: json['goal'] ?? '',
       target: json['target']?.toString() ?? '',
+      schedule: parsedSchedule,
     );
   }
 }

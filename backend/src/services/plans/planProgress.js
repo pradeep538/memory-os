@@ -22,7 +22,7 @@ class PlanProgressService {
         const activePlansResult = await query(`
             SELECT * FROM plans 
             WHERE user_id = $1 
-              AND category = $2 
+              AND LOWER(category) = LOWER($2) 
               AND status = 'active'
         `, [userId, category]);
 

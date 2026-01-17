@@ -267,7 +267,19 @@ class AsyncUploadResult {
       autoProcessed: json['auto_processed'] ?? false,
       message: json['message'] ?? '',
       memoryId: json['memory_id'] ?? '',
-      quota: json['quota'] != null ? VoiceQuota.fromJson(json['quota']) : null,
+    );
+  }
+}
+
+/// Result of audio transcription
+class TranscriptionResult {
+  final String text;
+
+  TranscriptionResult({required this.text});
+
+  factory TranscriptionResult.fromJson(Map<String, dynamic> json) {
+    return TranscriptionResult(
+      text: json['text'] ?? '',
     );
   }
 }

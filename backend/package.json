@@ -11,7 +11,13 @@
         "test:production": "node scripts/verify_production_ready.js",
         "migrate:plans": "node scripts/add_adaptive_scaling_fields.js",
         "test:adaptive": "node scripts/test_adaptive_scaling.js",
-        "test:fcm": "node scripts/send_test_push.js"
+        "test:fcm": "node scripts/send_test_push.js",
+        "test:notifications": "node scripts/test_blueprint_notifications.js",
+        "verify:habits": "node scripts/verify_habits.js",
+        "verify:gaps": "node scripts/verify_gap_detection.js",
+        "verify:blueprints": "node scripts/debug_plan_update.js",
+        "migrate:blueprints": "node scripts/migrate_blueprints.js",
+        "migrate:phases": "node scripts/migrate_phases.js"
     },
     "dependencies": {
         "fastify": "^4.25.0",

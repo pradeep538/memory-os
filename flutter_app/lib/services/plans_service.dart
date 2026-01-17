@@ -23,7 +23,7 @@ class PlansService extends ChangeNotifier {
     }
   }
 
-  // Generate new plan
+  // Generate new plan (AI)
   Future<ActionPlan?> generatePlan(
       String category, String goal, String frequency) async {
     try {
@@ -42,6 +42,87 @@ class PlansService extends ChangeNotifier {
       return null;
     } catch (e) {
       debugPrint('Error generating plan: $e');
+      return null;
+    }
+  }
+
+  // Create new plan (Manual)
+  Future<ActionPlan?> createPlan(Map<String, dynamic> planData) async {
+    try {
+      final response = await _apiClient.post(
+        '/plans',
+        body: planData,
+      );
+
+      if (response.success && response.data != null) {
+        return ActionPlan.fromJson(response.data);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error creating plan: $e');
+      return null;
+    }
+  }
+
+  // Update plan details
+  Future<ActionPlan?> updatePlan(
+      String planId, Map<String, dynamic> updates) async {
+    try {
+      final response = await _apiClient.patch(
+        '/plans/$planId',
+        body: updates,
+      );
+
+      if (response.success && response.data != null) {
+        return ActionPlan.fromJson(response.data);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error updating plan: $e');
+      return null;
+    }
+  }
+
+  // Archive plan
+  Future<bool> archivePlan(String planId) async {
+    try {
+      final response = await _apiClient.delete('/plans/$planId');
+      return response.success;
+    } catch (e) {
+      debugPrint('Error archiving plan: $e');
+      return false;
+    }
+  }
+
+  // Start Architect Session
+  Future<Map<String, dynamic>?> startArchitectSession() async {
+    try {
+      final response =
+          await _apiClient.post('/plans/architect/start', body: {});
+      if (response.success && response.data != null) {
+        return response.data;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error starting architect session: $e');
+      return null;
+    }
+  }
+
+  // Send Architect Message
+  Future<Map<String, dynamic>?> sendArchitectMessage(
+      String sessionId, String text) async {
+    try {
+      final response = await _apiClient.post(
+        '/plans/architect/chat',
+        body: {'sessionId': sessionId, 'text': text},
+      );
+      if (response.success && response.data != null) {
+        return response.data;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error sending architect message: $e');
       return null;
     }
   }

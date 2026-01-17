@@ -84,22 +84,26 @@ class InputEnhancementService {
         return `You are an intelligent life tracking assistant.
 Input: "${rawText}"
 
-CONTEXT: The user has these ACTIVE ACTION PLANS:
-${planContext}
+CONTEXT: The user has these ACTIVE BLUEPRINTS (Action Plans):
+\${planContext}
 
 Your task:
 1. Transform the input into a complete, natural sentence.
 2. Fill in implied context (articles, prepositions, etc.).
 3. Fix grammar and syntax.
-4. Extract key entities (duration, amount, category, etc.).
-5. **CRITICAL**: Check if this input fulfills any of the Active Plans above.
-   - Example: If input is "Ran 5k" and Plan is "Fitness", is_fulfilled = true.
-   - Example: If input is "Skipped gym", is_fulfilled = false (Progress 0).
+4. Extract key entities.
+5. **CRITICAL: BLUEPRINT MATCHING (Smart ID)**
+   - Check if this input advances any of the Active Blueprints listed above.
+   - MATCH SEMANTICS, NOT JUST KEYWORDS. 
+     - Example: "Hit the pavement" -> Matches "Running Blueprint" (Fitness).
+     - Example: "Took my pills" -> Matches "Meds Blueprint" (Category: Health).
+   - If a match is found, YOU MUST return the \`plan_id\` in \`plan_updates\`.
+   - If user input suggests a category different from the plan's label, TRUST THE PLAN MATCH first.
 
 Respond ONLY with valid JSON in this exact format:
 {
   "enhanced_text": "Complete, grammatically correct sentence",
-  "detected_category": "fitness (e.g. gym, workout, running) | finance | routine | health | mindfulness | generic",
+  "detected_category": "fitness (e.g. gym, workout, running) | finance | routine | health | medication | mindfulness | generic",
   "detected_entities": {
     "duration_minutes": number or null,
     "amount": number or null,
@@ -241,6 +245,42 @@ Respond with JSON:
         }
 
         return results;
+    }
+
+    /**
+     * Enhance Blueprint Goal and Derive Name
+     * Asks LLM to polish the goal and suggest a short title.
+     */
+    async enhanceBlueprintGoal(rawGoal) {
+        const prompt = `Refine this goal into a clear statement.
+Input: "${rawGoal}"
+
+Rules:
+1. Make it actionable but DO NOT add specific frequencies (like "3 times a week") unless the user explicitly stated them.
+2. If no frequency is given, use general terms like "regularly" or "consistently".
+3. Suggest a short 2-4 word title (Noun Phrase).
+
+Respond ONLY with valid JSON:
+{
+  "refined_goal": "Refined goal string",
+  "short_name": "Short Title"
+}`;
+
+        try {
+            const response = await llmService.generateStructuredResponse(prompt);
+            const parsed = JSON.parse(response.replace(/```json|```/g, '').trim());
+            return {
+                refined_goal: parsed.refined_goal || rawGoal,
+                short_name: parsed.short_name || rawGoal
+            };
+        } catch (error) {
+            console.error('Failed to enhance blueprint goal:', error);
+            // Fallback: Use raw goal and simple truncation for name
+            return {
+                refined_goal: rawGoal,
+                short_name: rawGoal.split(' ').slice(0, 4).join(' ')
+            };
+        }
     }
 }
 

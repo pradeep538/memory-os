@@ -26,17 +26,13 @@ export class ValidationService {
         const windowStart = new Date(timestamp.getTime() - duplicateWindow);
         const windowEnd = new Date(timestamp.getTime() + duplicateWindow);
 
-        const duplicates = await db.query(`
-      SELECT id, raw_input, created_at
-      FROM memory_units
-      WHERE user_id = ?
-        AND category = 'medication'
-        AND raw_input ILIKE ?
-        AND created_at BETWEEN ? AND ?
-    `, [userId, `%${medication}%`, windowStart.toISOString(), windowEnd.toISOString()]);
+        const duplicates = await db(
+            'SELECT id, raw_input, created_at FROM memory_units WHERE user_id = $1 AND category = $2 AND raw_input ILIKE $3 AND created_at BETWEEN $4 AND $5',
+            [userId, 'medication', `%${medication}%`, windowStart.toISOString(), windowEnd.toISOString()]
+        );
 
-        if (duplicates.length > 0) {
-            const existing = duplicates[0];
+        if (duplicates.rows.length > 0) {
+            const existing = duplicates.rows[0];
             const hoursDiff = Math.abs(new Date(existing.created_at) - timestamp) / (1000 * 60 * 60);
             errors.push(`Duplicate: "${medication}" already logged ${hoursDiff.toFixed(1)} hours ago`);
             return { valid: false, errors, duplicate: existing };
@@ -103,18 +99,14 @@ export class ValidationService {
         const windowStart = new Date(timestamp.getTime() - duplicateWindow);
         const windowEnd = new Date(timestamp.getTime() + duplicateWindow);
 
-        const duplicates = await db.query(`
-      SELECT id, raw_input, created_at, normalized_data
-      FROM memory_units
-      WHERE user_id = ?
-        AND category = 'finance'
-        AND normalized_data->>'amount' = ?
-        AND created_at BETWEEN ? AND ?
-    `, [userId, roundedAmount.toString(), windowStart.toISOString(), windowEnd.toISOString()]);
+        const duplicates = await db(
+            'SELECT id, raw_input, created_at, normalized_data FROM memory_units WHERE user_id = $1 AND category = $2 AND normalized_data->>\'amount\' = $3 AND created_at BETWEEN $4 AND $5',
+            [userId, 'finance', roundedAmount.toString(), windowStart.toISOString(), windowEnd.toISOString()]
+        );
 
-        if (duplicates.length > 0) {
+        if (duplicates.rows.length > 0) {
             errors.push('Duplicate transaction detected within 5 minutes');
-            return { valid: false, errors, duplicate: duplicates[0] };
+            return { valid: false, errors, duplicate: duplicates.rows[0] };
         }
 
         // 4. Backdate limit (max 7 days for finance)

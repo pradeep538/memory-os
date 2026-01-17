@@ -4,6 +4,7 @@ import questionGeneratorService from '../intelligence/questionGeneratorService.j
 import NotificationModel from '../../models/notification.model.js';
 import UserModel from '../../models/user.model.js';
 import planCoachingService from '../plans/planCoachingService.js';
+import blueprintNotificationService from './blueprintNotificationService.js';
 
 class SchedulerService {
     constructor() {
@@ -24,6 +25,9 @@ class SchedulerService {
 
         // Daily Plan Coaching - Every day at 9 AM
         this.schedulePlanCoaching();
+
+        // Blueprint Reminders - Every Minute (High Frequency Check)
+        this.scheduleBlueprintReminders();
 
         console.log('✅ Scheduled jobs started');
     }
@@ -91,6 +95,20 @@ class SchedulerService {
 
         this.jobs.push({ name: 'plan_coaching', job });
         console.log('  ✓ Plan coaching scheduled (Hourly Heartbeat)');
+    }
+
+    /**
+     * Blueprint Reminders - Every Minute
+     * Cron: '* * * * *'
+     * Checks for specific schedule slots (e.g. 08:00)
+     */
+    scheduleBlueprintReminders() {
+        const job = cron.schedule('* * * * *', async () => {
+            await blueprintNotificationService.checkDueReminders();
+        });
+
+        this.jobs.push({ name: 'blueprint_reminders', job });
+        console.log('  ✓ Blueprint reminders scheduled (Every Minute)');
     }
 
     /**
@@ -193,6 +211,8 @@ class SchedulerService {
                 return await this.generateDailySummaryNotification(userId);
             case 'plan_coaching':
                 return await planCoachingService.checkAllPlans();
+            case 'blueprint_reminders':
+                return await blueprintNotificationService.checkDueReminders();
             default:
                 throw new Error(`Unknown job: ${jobName}`);
         }

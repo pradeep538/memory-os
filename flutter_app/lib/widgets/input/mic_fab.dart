@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -10,10 +11,19 @@ import 'package:vibration/vibration.dart';
 /// Hold-to-Talk Mic Button for bottom navigation
 class MicFab extends StatefulWidget {
   final bool isEnabled;
+  final bool isCompact; // Added for compact mode support
+  final Function(bool)? onStateChanged; // Added for state change support
+  final Function(String)?
+      onResult; // Added for result support (though we use onRecordingFinished for file)
+  final Function(File)? onRecordingFinished; // NEW: Custom handler
 
   const MicFab({
     super.key,
     this.isEnabled = true,
+    this.isCompact = false,
+    this.onStateChanged,
+    this.onResult,
+    this.onRecordingFinished,
   });
 
   @override
@@ -148,6 +158,14 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
 
     // Allow even short recordings (e.g. "Lights on")
     if (file != null) {
+      // NEW: Custom handler check
+      if (widget.onRecordingFinished != null) {
+        widget.onRecordingFinished!(file);
+        // Reset provider to idle since external handler took over
+        provider.clearInput();
+        return;
+      }
+
       // Async upload
       final success = await provider.processAudio(file);
 

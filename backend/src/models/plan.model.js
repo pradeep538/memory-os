@@ -54,20 +54,88 @@ class PlanModel {
 
         const query = `
             INSERT INTO plans (
-                user_id, plan_name, description, duration_weeks, 
-                phases, status, start_date, category, progress
+                user_id, plan_name, duration_weeks, 
+                plan_data, status, category, progress
             )
-            VALUES ($1, $2, $3, $4, $5, 'active', NOW(), $6, 0)
+            VALUES ($1, $2, $3, $4, 'active', $5, 0)
             RETURNING *
         `;
 
         const values = [
-            userId, name, description, durationWeeks,
-            JSON.stringify(phases), category
+            userId, name, durationWeeks,
+            phases, category
         ];
 
         const result = await db.query(query, values);
         return result.rows[0];
+    }
+
+    /**
+     * Archive a plan (Soft Delete)
+     * @param {string} planId 
+     * @param {string} userId 
+     */
+    static async archive(planId, userId) {
+        const query = `
+            UPDATE plans 
+            SET status = 'archived'
+            WHERE id = $1 AND user_id = $2
+            RETURNING *
+        `;
+        const result = await db.query(query, [planId, userId]);
+        return result.rows[0];
+    }
+
+    /**
+     * Update plan details (Edit)
+     * @param {string} planId 
+     * @param {string} userId 
+     * @param {object} updates - { plan_name, goal, etc. }
+     */
+    static async update(planId, userId, updates) {
+        const allowedFields = ['plan_name', 'category', 'description'];
+        const fields = [];
+        const values = [];
+        let idx = 1;
+
+        for (const [key, value] of Object.entries(updates)) {
+            if (allowedFields.includes(key)) {
+                fields.push(`${key} = $${idx}`);
+                values.push(value);
+                idx++;
+            }
+        }
+
+        if (fields.length === 0) return null;
+
+        values.push(planId, userId);
+        const query = `
+            UPDATE plans 
+            SET ${fields.join(', ')}
+            WHERE id = $${idx} AND user_id = $${idx + 1}
+            RETURNING *
+        `;
+
+        const result = await db.query(query, values);
+        return result.rows[0];
+    }
+
+    /**
+     * Check for and expire plans that have passed their duration.
+     * Transitions status from 'active' -> 'completed'.
+     * Should be called by a daily cron job.
+     */
+    static async checkExpirations() {
+        const query = `
+            UPDATE plans 
+            SET status = 'completed'
+            WHERE status = 'active' 
+              AND duration_weeks < 52 -- Ignore "Ongoing" plans
+              AND (created_at + (duration_weeks || ' weeks')::interval) < NOW()
+            RETURNING *
+        `;
+        const result = await db.query(query);
+        return result.rows;
     }
 }
 

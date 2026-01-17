@@ -148,6 +148,10 @@ fastify.setErrorHandler((error, request, reply) => {
 // Start server
 const start = async () => {
     try {
+        // Run Auto-Migrations (Fix Schema Latency)
+        const { runAutoMigrations } = await import('./db/autoMigrate.js');
+        await runAutoMigrations();
+
         // Start Queue Client (for producing jobs)
         const queue = (await import('./lib/queue.js')).default;
         await queue.start();
