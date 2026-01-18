@@ -149,6 +149,8 @@ await fastify.register(messagingRoutes, { prefix: '/api/v1' });
 await fastify.register(engagementRoutes, { prefix: '/api/v1/engagement' });
 await fastify.register(configRoutes, { prefix: '/api/v1/config' });
 await fastify.register(routinesRoutes, { prefix: '/api/v1/routines' });
+// Admin Routes (Debug/Monitoring)
+await fastify.register((await import('./api/routes/admin.routes.js')).default, { prefix: '/api/v1/admin' });
 
 // Realtime WebSocket Routes (NEW)
 await fastify.register((await import('@fastify/websocket')).default);

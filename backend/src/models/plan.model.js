@@ -6,12 +6,28 @@ class PlanModel {
      * Used for context-aware ingestion
      */
     static async findActive(userId) {
+        // Smart Progress: Count weekly memories dynamically
+        // Resets every Monday automatically via date_trunc('week', ...)
         const query = `
-            SELECT * FROM plans 
-            WHERE user_id = $1 AND status = 'active'
+            SELECT p.*, 
+            COALESCE((
+                SELECT COUNT(*) 
+                FROM memory_units m 
+                WHERE m.user_id = p.user_id 
+                  AND m.category = p.category 
+                  AND m.created_at >= date_trunc('week', CURRENT_DATE)
+                  AND m.status != 'deleted'
+            ), 0)::int as dynamic_progress
+            FROM plans p 
+            WHERE p.user_id = $1 AND p.status = 'active'
         `;
         const result = await db.query(query, [userId]);
-        return result.rows;
+
+        // Map dynamic_progress to progress field for frontend compatibility
+        return result.rows.map(row => ({
+            ...row,
+            progress: row.dynamic_progress // Override stored progress with live count
+        }));
     }
 
     /**

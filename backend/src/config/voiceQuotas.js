@@ -6,7 +6,7 @@
 
 export const VOICE_QUOTAS = {
     free: {
-        daily_limit: 100,
+        daily_limit: 30,
         reset_interval: 'daily', // daily, weekly, monthly
         overage_allowed: false
     },
@@ -16,14 +16,9 @@ export const VOICE_QUOTAS = {
         overage_allowed: false
     },
     premium: {
-        daily_limit: 100,
+        daily_limit: 200,
         reset_interval: 'daily',
         overage_allowed: false
-    },
-    enterprise: {
-        daily_limit: null, // unlimited
-        reset_interval: 'daily',
-        overage_allowed: true
     }
 };
 

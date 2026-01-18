@@ -14,87 +14,87 @@ class SchedulerService {
     /**
      * Start all scheduled jobs
      */
+    async getAllActiveUsers() {
+        const sql = 'SELECT id, timezone FROM users';
+        const res = await import('../../db/index.js').then(m => m.query(sql));
+        return res.rows;
+    }
+
+    /**
+     * Get users where current time in THEIR timezone matches target hour/day
+     * hour: 0-23
+     * dayOfWeek: 0-6 (0=Sun), or null for any day
+     */
+    async getUsersWithLocalTime(targetHour, targetDayOfWeek = null) {
+        const { query } = await import('../../db/index.js');
+
+        let sql = `
+            SELECT id FROM users
+            WHERE EXTRACT(HOUR FROM NOW() AT TIME ZONE COALESCE(timezone, 'UTC')) = $1
+        `;
+        const params = [targetHour];
+
+        if (targetDayOfWeek !== null) {
+            sql += ` AND EXTRACT(DOW FROM NOW() AT TIME ZONE COALESCE(timezone, 'UTC')) = $2`;
+            params.push(targetDayOfWeek);
+        }
+
+        const res = await query(sql, params);
+        return res.rows;
+    }
+
+    /**
+     * Start all scheduled jobs
+     */
     startAll() {
-        console.log('🕐 Starting scheduled jobs...');
+        console.log('🕐 Starting scheduled jobs (Timezone Aware)...');
 
-        // Weekly insight generation - Every Sunday at 8 AM
-        this.scheduleWeeklyInsights();
+        // Master Hourly Job (Handles all "at X hour" tasks)
+        this.scheduleHourlyMasterParams();
 
-        // Daily summary - Every day at 11 PM
-        this.scheduleDailySummary();
-
-        // Daily Plan Coaching - Every day at 9 AM
-        this.schedulePlanCoaching();
-
-        // Blueprint Reminders - Every Minute (High Frequency Check)
+        // High Frequency Jobs
         this.scheduleBlueprintReminders();
 
         console.log('✅ Scheduled jobs started');
     }
 
     /**
-     * Weekly Insights - Every Sunday at 8:00 AM
-     * Cron: '0 8 * * 0'
+     * Master Hourly Job
+     * Runs every hour at minute 0
+     * Checks for Weekly Insights (8 AM Sun), Daily Summary (11 PM), Plan Coaching (9 AM)
      */
-    scheduleWeeklyInsights() {
-        const job = cron.schedule('0 8 * * 0', async () => {
-            console.log('📊 Running weekly insights generation...');
+    scheduleHourlyMasterParams() {
+        cron.schedule('0 * * * *', async () => {
+            console.log('⏰ Running Hourly Master Job...');
 
-            try {
-                // Get all users (in production, batch this)
-                const users = await this.getAllActiveUsers();
-
-                for (const user of users) {
-                    await this.generateWeeklyInsightNotification(user.id);
-                }
-
-                console.log(`✅ Weekly insights generated for ${users.length} users`);
-            } catch (error) {
-                console.error('❌ Weekly insights job failed:', error);
+            // 1. Weekly Insights (Sunday 8 AM Display Time)
+            const weeklyUsers = await this.getUsersWithLocalTime(8, 0); // 8 AM, Sunday
+            if (weeklyUsers.length > 0) {
+                console.log(`   Running Weekly Insights for ${weeklyUsers.length} users (It is 8 AM Sunday for them)`);
+                for (const user of weeklyUsers) await this.generateWeeklyInsightNotification(user.id);
             }
-        });
 
-        this.jobs.push({ name: 'weekly_insights', job });
-        console.log('  ✓ Weekly insights scheduled (Sundays 8 AM)');
-    }
-
-    /**
-     * Daily Summary - Every day at 11:00 PM
-     * Cron: '0 23 * * *'
-     */
-    scheduleDailySummary() {
-        const job = cron.schedule('0 23 * * *', async () => {
-            console.log('📝 Running daily summary generation...');
-
-            try {
-                const users = await this.getAllActiveUsers();
-
-                for (const user of users) {
-                    await this.generateDailySummaryNotification(user.id);
-                }
-
-                console.log(`✅ Daily summaries generated for ${users.length} users`);
-            } catch (error) {
-                console.error('❌ Daily summary job failed:', error);
+            // 2. Daily Summary (11 PM Daily)
+            const summaryUsers = await this.getUsersWithLocalTime(23); // 11 PM, Any day
+            if (summaryUsers.length > 0) {
+                console.log(`   Running Daily Summary for ${summaryUsers.length} users (It is 11 PM for them)`);
+                for (const user of summaryUsers) await this.generateDailySummaryNotification(user.id);
             }
-        });
 
-        this.jobs.push({ name: 'daily_summary', job });
-        console.log('  ✓ Daily summary scheduled (11 PM)');
-    }
-
-    /**
-     * Plan Coaching - Every Hour (Heartbeat)
-     * Cron: '0 * * * *'
-     */
-    schedulePlanCoaching() {
-        // Run every hour at minute 0
-        const job = cron.schedule('0 * * * *', async () => {
+            // 3. Plan Coaching (9 AM Daily)
+            // TODO: Checking logic for Plan Coaching (it might need to be run often?)
+            // Original code ran it hourly. Let's keep it hourly for everyone or restricted?
+            // "Daily Plan Coaching" implies once a day. 
+            // Previous code said "Every Hour (Heartbeat)". 
+            // Let's assume Plan Coaching needs hourly heartbeat for "Expiry" checks.
+            // So we run it for ALL users every hour.
+            // But wait, `checkAllPlans` might be heavy.
+            // If it's just checking expiry, it's fine.
             await planCoachingService.checkAllPlans();
-        });
 
-        this.jobs.push({ name: 'plan_coaching', job });
-        console.log('  ✓ Plan coaching scheduled (Hourly Heartbeat)');
+        });
+        this.jobs.push({ name: 'hourly_master', job: 'hourly' });
+        console.log('  ✓ Master Hourly Job scheduled');
     }
 
     /**

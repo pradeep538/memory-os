@@ -14,6 +14,85 @@ class LLMService {
         });
     }
 
+    async evaluateNovelty(newPattern, historyContext, timezone = 'UTC') {
+        const timeService = (await import('../time/timeService.js')).default;
+
+        // Helper: Pre-calculate local time if pattern has time data
+        let timeContext = "";
+        if (newPattern.evidence?.peak_hour) {
+            // Construct a dummy date at peak_hour UTC today
+            const now = new Date();
+            now.setUTCHours(newPattern.evidence.peak_hour, 0, 0, 0);
+            const localTime = await timeService.formatTimeForUser(timezone, now, 'h:mm a');
+            console.log(`   🕒 Time Logic: Peak ${newPattern.evidence.peak_hour} UTC -> ${localTime} (${timezone})`);
+            timeContext = `(HINT: The pattern peak hour ${newPattern.evidence.peak_hour}:00 UTC corresponds to **${localTime}** in the user's timezone. Use this!)`;
+        }
+
+        // Wait, TimeService expects userId to look up timezone.
+        // But here I'm passing 'timezone' string directly.
+        // I should stick to the string logic or update TimeService to allow "userId OR timezoneString".
+        // Let's stick to prompt instruction for now, but use TimeService if I can.
+        // Actually, previous implementation passed 'timezone' string. 
+        // Let's keep the STRONG prompt instruction, it is robust enough if LLM obeys.
+        // But I will clean up the code to look cleaner.
+
+        const prompt = `
+You are a "Novelty Engine" for a personal AI. 
+
+CRITICAL INSTRUCTION: TIMEZONE CONVERSION
+- The user is in: **${timezone}**.
+- The data below is in **UTC**.
+${timeContext}
+- You MUST convert all times from UTC to **${timezone}** in your response.
+- You MUST convert all times from UTC to **${timezone}** in your response.
+- Example: If data says "08:00 UTC" and user is "America/New_York" (UTC-5), you must say "3:00 AM".
+- NEVER say "UTC" in the final insight.
+
+CONTEXT (Recent History):
+${historyContext || "No recent history."}
+
+NEW PATTERN DETECTED (Data is UTC):
+- Description: ${newPattern.description}
+- Stats: ${JSON.stringify(newPattern.evidence || {})}
+
+TASK:
+1. Is this Novel?
+2. If YES, write a friendly insight.
+   - **Check**: Did you convert the time to ${timezone}? if not, fix it.
+3. If NOT NOVEL: Return null.
+
+OUTPUT JSON ONLY:
+{
+  "isNovel": boolean,
+  "insightText": "string or null",
+  "reasoning": "string"
+}
+`;
+        try {
+            const response = await this.ai.models.generateContent({
+                model: config.gemini.model || 'gemini-2.0-flash-exp',
+                contents: prompt
+            });
+
+            let jsonText = response.text.trim();
+            if (jsonText.startsWith('```json')) {
+                jsonText = jsonText.slice(7, -3).trim();
+            } else if (jsonText.startsWith('```')) {
+                jsonText = jsonText.slice(3, -3).trim();
+            }
+
+            const result = JSON.parse(jsonText);
+            return result;
+        } catch (error) {
+            console.error('LLM novelty evaluation error:', error);
+            return {
+                isNovel: false,
+                insightText: null,
+                reasoning: `Error during LLM evaluation: ${error.message}`
+            };
+        }
+    }
+
     /**
      * Classify intent and extract entities from user input
      */

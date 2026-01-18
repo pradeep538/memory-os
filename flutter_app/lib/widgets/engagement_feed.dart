@@ -105,7 +105,7 @@ class _EngagementFeedState extends State<EngagementFeed> {
                   ),
                   subtitle: Text(item.body),
                   trailing: IconButton(
-                    icon: const Icon(Icons.check, size: 16),
+                    icon: const Icon(Icons.close, size: 20, color: Colors.grey),
                     onPressed: () => _markRead(item.id),
                   ),
                 ),

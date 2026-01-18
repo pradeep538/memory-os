@@ -131,9 +131,10 @@ class HabitModel {
 
     /**
      * Log habit completion
+     * completionDate: 'YYYY-MM-DD' (User's Local Date)
      */
-    static async logCompletion(habitId, userId, completed, notes = null) {
-        const today = new Date().toISOString().split('T')[0];
+    static async logCompletion(habitId, userId, completed, completionDate, notes = null) {
+        if (!completionDate) throw new Error("completionDate (YYYY-MM-DD) is required");
 
         const query = `
       INSERT INTO habit_completions (
@@ -147,10 +148,10 @@ class HabitModel {
       RETURNING *
     `;
 
-        const result = await db.query(query, [habitId, userId, today, completed, notes]);
+        const result = await db.query(query, [habitId, userId, completionDate, completed, notes]);
 
-        // Update streak
-        await this.updateStreak(habitId);
+        // Update streak using the submitted date reference
+        await this.updateStreak(habitId, completionDate);
 
         return result.rows[0];
     }
@@ -173,14 +174,15 @@ class HabitModel {
 
     /**
      * Calculate and update streak
+     * referenceDate: 'YYYY-MM-DD' (The "Today" anchor for calculation)
      */
-    /**
-     * Calculate and update streak
-     */
-    static async updateStreak(habitId) {
+    static async updateStreak(habitId, referenceDate = null) {
         // 1. Get habit details for frequency targets
         const habit = await this.findById(habitId);
         if (!habit) return;
+
+        // If no reference date provided, fallback to NOW (UTC) - Legacy/Safety
+        const anchorDate = referenceDate || new Date().toISOString().split('T')[0];
 
         const unit = habit.target_frequency_unit || 'day';
         const target = habit.target_frequency || 1;
@@ -241,35 +243,18 @@ class HabitModel {
         });
 
         // 4. Calculate Streak
-        // Strategy: Start from Current Period (Today). 
-        // If Today meets target -> Streak 1. Check Previous.
-        // If Today doesn't meet target -> Check Yesterday/Previous Period? 
-        // (Grace period: If I haven't done it TODAY, but did Yesterday, is streak 0? 
-        //  For Daily: Yes, usually. But typically we show "Streak active" until missed deadline?
-        //  Common logic: If missed yesterday, streak 0. If done yesterday, streak N. If done today, streak N+1.)
-
-        // Let's iterate backwards period by period
-        const todayKey = getTimeKey(new Date().toISOString().split('T')[0]);
+        // Start from Anchor (Today). 
+        const todayKey = getTimeKey(anchorDate);
         let checkKey = todayKey;
 
         // Check if current period is valid
         if ((counts[checkKey] || 0) >= target) {
             currentStreak++;
         } else {
-            // If current period not done, check if previous period was done
-            // If so, streak is valid but doesn't include current period yet.
-            // UNLESS the current period is OVER? 
-            // For simplicity: We start checking from Today. If not met, we check Yesterday. 
-            // If Yesterday met, streak continues. If Yesterday NOT met, streak broken (0).
-
-            // Wait, if I missed Today, streak is still shown?
-            // "Current Streak" usually implies "Consecutive periods completed ending now".
-            // If Today is Wed, done Mon, Tue. Streak 2. (Today pending).
-
             // Adjust start key:
             let prevKey = decrementKey(todayKey);
             if (unit === 'week') { // Manual decrement for week
-                const d = new Date();
+                const d = new Date(anchorDate); // Use anchorDate
                 d.setDate(d.getDate() - 7);
                 prevKey = getTimeKey(d.toISOString().split('T')[0]);
             }
@@ -286,13 +271,8 @@ class HabitModel {
         }
 
         // Check previous periods
-        let dateIter = new Date();
-        if (checkKey !== todayKey) dateIter.setDate(dateIter.getDate() - (unit === 'week' ? 7 : unit === 'month' ? 30 : 1)); // Rough backstep to align
-
-        // Robust iteration:
-        // We really just need to walk back Keys.
-        // Given complexity of Calendar math, look at `counts` keys sorted desc?
-        // No, gaps matter.
+        let dateIter = new Date(anchorDate); // Use anchorDate
+        if (checkKey !== todayKey) dateIter.setDate(dateIter.getDate() - (unit === 'week' ? 7 : unit === 'month' ? 30 : 1));
 
         // Use a loop MAX 365
         for (let i = 1; i < 365; i++) {
@@ -302,8 +282,6 @@ class HabitModel {
             else dateIter.setDate(dateIter.getDate() - 1);
 
             const prevKey = getTimeKey(dateIter.toISOString().split('T')[0]);
-
-            // Stop if we wrapped around or something (sanity check) or hit future
 
             if ((counts[prevKey] || 0) >= target) {
                 currentStreak++;

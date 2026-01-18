@@ -76,7 +76,13 @@ class PatternDetectionService:
                     'frequency_per_week': round(per_week, 1),
                     'regularity_score': round(regularity, 2),
                     'confidence': round(min(regularity, total_count / 10), 2),
-                    'description': f"You {activity_name} {round(per_week, 1)}x per week on average"
+                    'description': f"You {activity_name} {round(per_week, 1)}x per week on average",
+                    'evidence': {
+                        'sample_size': int(total_count),
+                        'days_spanned': int(days_span),
+                        'frequency': round(per_week, 2),
+                        'regularity': round(regularity, 2)
+                    }
                 })
         
         return sorted(patterns, key=lambda x: x['confidence'], reverse=True)
@@ -115,15 +121,30 @@ class PatternDetectionService:
             # Calculate concentration (how much activity happens at peak hour)
             concentration = peak_count / total_count
             
+            # Format time for human readability (Midnight/Noon handling)
+            hour_int = int(peak_hour)
+            if hour_int == 0:
+                time_str = "Midnight"
+            elif hour_int == 12:
+                time_str = "Noon"
+            else:
+                time_str = datetime.strptime(str(hour_int), '%H').strftime('%I %p').lstrip('0')
+
             if concentration > 0.5 and peak_count >= 3:  # More than half at this hour
                 patterns.append({
                     'pattern_type': 'time_preference',
                     'category': category,
                     'activity': activity,
-                    'peak_hour': int(peak_hour),
+                    'peak_hour': hour_int,
                     'concentration': round(concentration, 2),
                     'confidence': round(min(concentration, peak_count / 10), 2),
-                    'description': f"You usually {activity} around {datetime.strptime(str(int(peak_hour)), '%H').strftime('%I %p').lstrip('0')}"
+                    'description': f"You usually {activity} around {time_str}",
+                    'evidence': {
+                        'sample_size': int(total_count),
+                        'peak_count': int(peak_count),
+                        'concentration': round(concentration, 2),
+                        'peak_hour': hour_int
+                    }
                 })
         
         return sorted(patterns, key=lambda x: x['confidence'], reverse=True)

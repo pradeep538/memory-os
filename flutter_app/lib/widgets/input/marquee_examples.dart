@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../services/api_client.dart';
 import '../../config/app_colors.dart';
 import '../../config/app_typography.dart';
 import '../../config/app_spacing.dart';
@@ -10,6 +11,13 @@ class MarqueeExample {
   final String category;
 
   const MarqueeExample(this.text, this.category);
+
+  factory MarqueeExample.fromJson(Map<String, dynamic> json) {
+    return MarqueeExample(
+      json['text'] ?? '',
+      json['category'] ?? 'generic',
+    );
+  }
 }
 
 class MarqueeExamples extends StatefulWidget {
@@ -22,7 +30,8 @@ class MarqueeExamples extends StatefulWidget {
 }
 
 class _MarqueeExamplesState extends State<MarqueeExamples> {
-  final List<MarqueeExample> _examples = const [
+  // Default examples as fallback
+  List<MarqueeExample> _examples = const [
     MarqueeExample('Had a coffee at Starbucks for \$5', 'finance'),
     MarqueeExample('Ran 5km in the park this morning', 'fitness'),
     MarqueeExample('Feeling anxious about the deadline', 'mindfulness'),
@@ -33,16 +42,38 @@ class _MarqueeExamplesState extends State<MarqueeExamples> {
 
   int _currentIndex = 0;
   Timer? _timer;
+  final _apiClient = ApiClient();
 
   @override
   void initState() {
     super.initState();
-    _startRotation();
+    _fetchExamples();
+  }
+
+  Future<void> _fetchExamples() async {
+    final response = await _apiClient.get<List<MarqueeExample>>(
+      '/config/marquee',
+      fromJson: (data) => (data as List)
+          .map((e) => MarqueeExample.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+
+    if (mounted) {
+      if (response.success &&
+          response.data != null &&
+          response.data!.isNotEmpty) {
+        setState(() {
+          _examples = response.data!;
+        });
+      }
+      _startRotation();
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _apiClient.dispose();
     super.dispose();
   }
 

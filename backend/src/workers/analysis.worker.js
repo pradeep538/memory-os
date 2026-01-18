@@ -32,30 +32,43 @@ export default async function (jobOrJobs) {
             console.log(`   Stats: Found ${patternList.length} patterns.`);
 
             // 2. Generate Feed Items
-            if (patternList.length > 0) {
-                const topPattern = patternList[0];
-                // Map Python's 'pattern_type' to 'type' if needed
-                const pType = topPattern.type || topPattern.pattern_type || topPattern.category || 'General';
+            // 2. Smart Insight Generation (Novelty Check)
 
+            // A. Get Context (Last 5 things we told them)
+            const historyContext = await feedService.getRecentInsights(userId, 5);
+            const userTimezone = await feedService.getUserTimezone(userId);
+
+            const topPattern = patternList[0];
+
+            // B. Ask LLM: "Is this news?"
+            // Dynamic import to avoid circular dependency issues if any, though llmService is clean
+            const llmService = (await import('../services/understanding/llmService.js')).default;
+
+            console.log(`   🧠 Checking Novelty for: ${topPattern.description} (TZ: ${userTimezone})`);
+            const noveltyResult = await llmService.evaluateNovelty(topPattern, historyContext, userTimezone);
+
+            console.log(`   🤖 LLM Verdict: ${noveltyResult.isNovel ? '✅ NOVEL' : '❌ REPEAT'} (${noveltyResult.reasoning})`);
+
+            if (noveltyResult.isNovel) {
                 const insight = {
-                    type: 'pattern',
-                    title: `Pattern Detected: ${pType}`,
-                    body: topPattern.description || `Trend in ${topPattern.category}.`,
+                    type: 'insight', // Use 'insight' for Amber Bulb 💡
+                    title: `Insight: ${topPattern.category.charAt(0).toUpperCase() + topPattern.category.slice(1)}`,
+                    body: noveltyResult.insightText || topPattern.description,
                     data: {
                         pattern_id: topPattern.id,
-                        confidence: topPattern.confidence
+                        pattern_type: topPattern.pattern_type || topPattern.type,
+                        category: topPattern.category,
+                        confidence: topPattern.confidence,
+                        evidence: topPattern.evidence,
+                        reasoning: noveltyResult.reasoning
                     }
                 };
 
-                // Check if already exists
-                const exists = await feedService.checkPatternExists(userId, topPattern.id);
-                if (exists) {
-                    console.log(`   Stats: Feed item for pattern ${topPattern.id} already exists. Skipping.`);
-                    continue;
-                }
-
-                await feedService.createItem(userId, insight);
-                console.log(`📝 Created Feed Item: ${insight.title}`);
+                // Upsert (This will reset the 'updated_at' and bring it to top)
+                await feedService.upsertPatternItem(userId, insight);
+                console.log(`   💡 Published Insight: ${insight.body}`);
+            } else {
+                console.log(`   zzz Skipped (Not Novel).`);
             }
 
         } catch (err) {

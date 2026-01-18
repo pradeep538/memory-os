@@ -25,6 +25,20 @@ class ConfigController {
             });
         }
     }
+
+    /**
+     * Get marquee examples
+     * @route GET /api/v1/config/marquee
+     */
+    async getMarqueeExamples(request, reply) {
+        // Dynamic import to allow hot-reloading of config if needed, or just standard import
+        const { MARQUEE_EXAMPLES } = await import('../../config/marquee.js');
+
+        return reply.send({
+            success: true,
+            data: MARQUEE_EXAMPLES
+        });
+    }
 }
 
 export default new ConfigController();

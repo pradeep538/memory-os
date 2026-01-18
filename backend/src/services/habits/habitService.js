@@ -157,8 +157,9 @@ Respond ONLY with valid JSON.
     async getUserHabits(userId, status = 'active') {
         const habits = await HabitModel.findByUser(userId, status);
 
-        // Enrich with today's completion status
-        const today = new Date().toISOString().split('T')[0];
+        // Enrich with today's completion status (USER TIMEZONE)
+        const timeService = (await import('../time/timeService.js')).default;
+        const today = await timeService.formatTimeForUser(userId, new Date(), 'yyyy-MM-dd');
 
         // Fetch all completions for today (we need a new Model method or raw query)
         // Since we don't have a bulk fetch in Model yet, we can do it here or add it to Model.
@@ -218,7 +219,11 @@ Respond ONLY with valid JSON.
      * Log today's completion
      */
     async logCompletion(habitId, userId, completed, notes = null) {
-        return await HabitModel.logCompletion(habitId, userId, completed, notes);
+        // Calculate Today in User Timezone
+        const timeService = (await import('../time/timeService.js')).default;
+        const today = await timeService.formatTimeForUser(userId, new Date(), 'yyyy-MM-dd');
+
+        return await HabitModel.logCompletion(habitId, userId, completed, today, notes);
     }
 
     /**
