@@ -87,6 +87,12 @@ class MemoryService {
     async getCategoryStats(userId) {
         return await MemoryModel.getCountByCategory(userId);
     }
+    /**
+     * Delete a memory
+     */
+    async deleteMemory(memoryId, userId) {
+        return await MemoryModel.delete(memoryId, userId);
+    }
 }
 
 export default new MemoryService();

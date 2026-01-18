@@ -9,7 +9,7 @@ class MemoryController {
         try {
             const { rawInput, source, eventType, category, normalizedData, confidenceScore } = request.body;
 
-            
+
             const userId = request.userId;
 
             const memory = await memoryService.createMemory(userId, {
@@ -43,7 +43,7 @@ class MemoryController {
         try {
             const { category, eventType, startDate, endDate, limit, offset } = request.query;
 
-            
+
             const userId = request.userId;
 
             const memories = await memoryService.getUserMemories(userId, {
@@ -77,7 +77,7 @@ class MemoryController {
         try {
             const { id } = request.params;
 
-            
+
             const userId = request.userId;
 
             const memory = await memoryService.getMemory(id, userId);
@@ -111,7 +111,7 @@ class MemoryController {
             const { id } = request.params;
             const correctedData = request.body;
 
-            
+
             const userId = request.userId;
 
             const correctedMemory = await memoryService.correctMemory(id, userId, correctedData);
@@ -136,7 +136,7 @@ class MemoryController {
      */
     async categoryStats(request, reply) {
         try {
-            
+
             const userId = request.userId;
 
             const stats = await memoryService.getCategoryStats(userId);
@@ -144,6 +144,36 @@ class MemoryController {
             reply.send({
                 success: true,
                 data: stats
+            });
+        } catch (error) {
+            request.log.error(error);
+            reply.code(500).send({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+    /**
+     * Remove a memory
+     * DELETE /api/v1/memory/:id
+     */
+    async remove(request, reply) {
+        try {
+            const { id } = request.params;
+            const userId = request.userId;
+
+            const deletedMemory = await memoryService.deleteMemory(id, userId);
+
+            if (!deletedMemory) {
+                return reply.code(404).send({
+                    success: false,
+                    error: 'Memory not found'
+                });
+            }
+
+            reply.send({
+                success: true,
+                message: 'Memory deleted successfully'
             });
         } catch (error) {
             request.log.error(error);

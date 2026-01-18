@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
@@ -10,17 +9,10 @@ class Config {
   // API CONFIGURATION
   // ============================================================================
 
-  static String get apiBaseUrl {
-    if (Platform.isAndroid) {
-      return 'http://localhost:3000/api/v1';
-    }
-    return 'http://localhost:3000/api/v1';
-  }
+  static String get apiBaseUrl => 'http://localhost:3000/api/v1';
 
-  // For emulator/device testing:
-  // Android Emulator: 'http://10.0.2.2:3000/api/v1'
-  // iOS Simulator: 'http://localhost:3000/api/v1'
-  // Real device: 'http://<your-ip>:3000/api/v1'
+  // For real device with adb reverse tcp:3000 tcp:3000
+  // use 'http://localhost:3000/api/v1'
 
   static const Duration apiTimeout = Duration(seconds: 60);
 

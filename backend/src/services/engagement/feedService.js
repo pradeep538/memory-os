@@ -42,6 +42,7 @@ class FeedService {
 
     /**
      * Get active feed items for a user
+     * FALLBACK: If no active insights, show latest memory from today.
      */
     async getFeed(userId, limit = 10) {
         const sql = `

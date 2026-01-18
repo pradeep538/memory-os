@@ -1,9 +1,25 @@
+import 'dart:async';
 import 'api_client.dart';
 import '../models/memory_models.dart';
 
 /// Service for memory CRUD operations
 class MemoryService {
   final ApiClient _client;
+
+  // Real-time event bus for memories
+  final _memoryCreatedController = StreamController<Memory>.broadcast();
+  Stream<Memory> get onMemoryCreated => _memoryCreatedController.stream;
+
+  final _memoryDeletedController = StreamController<String>.broadcast();
+  Stream<String> get onMemoryDeleted => _memoryDeletedController.stream;
+
+  void notifyMemoryCreated(Memory memory) {
+    _memoryCreatedController.add(memory);
+  }
+
+  void notifyMemoryDeleted(String id) {
+    _memoryDeletedController.add(id);
+  }
 
   MemoryService(this._client);
 

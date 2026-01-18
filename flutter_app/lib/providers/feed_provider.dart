@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import '../services/services.dart';
@@ -74,7 +75,25 @@ class FeedProvider extends ChangeNotifier {
         _engagementService = engagementService,
         _analyticsService = analyticsService,
         _notificationsService = notificationsService,
-        _featureFlagService = featureFlagService;
+        _featureFlagService = featureFlagService {
+    _initRealtimeSync();
+  }
+
+  StreamSubscription<Memory>? _memorySubscription;
+  StreamSubscription<String>? _memoryDeletionSubscription;
+
+  void _initRealtimeSync() {
+    _memorySubscription = _memoryService.onMemoryCreated.listen((memory) {
+      debugPrint('🔔 FeedProvider: Received real-time memory: ${memory.id}');
+      addMemory(memory);
+    });
+
+    _memoryDeletionSubscription =
+        _memoryService.onMemoryDeleted.listen((memoryId) {
+      debugPrint('🗑️ FeedProvider: Received deletion event: $memoryId');
+      removeMemory(memoryId);
+    });
+  }
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -419,6 +438,12 @@ class FeedProvider extends ChangeNotifier {
 
   /// Add new memory to recent memories
   void addMemory(Memory memory) {
+    // Prevent duplicates
+    if (_recentMemories.any((m) => m.id == memory.id)) {
+      debugPrint('FeedProvider: Memory ${memory.id} already exists, skipping.');
+      return;
+    }
+
     _recentMemories.insert(0, memory);
     if (_recentMemories.length > 10) {
       _recentMemories = _recentMemories.take(10).toList();
@@ -430,5 +455,31 @@ class FeedProvider extends ChangeNotifier {
 
     _calculateWidgetPriorities();
     notifyListeners();
+  }
+
+  /// Remove memory from recent memories (used for Undo/Delete)
+  void removeMemory(String memoryId) {
+    bool changed = false;
+
+    if (_recentMemories.any((m) => m.id == memoryId)) {
+      _recentMemories.removeWhere((m) => m.id == memoryId);
+      changed = true;
+    }
+
+    // Also remove from category-specific widget data if needed
+    // Actually, _calculateWidgetPriorities handles this by rebuilding widgets
+    // from _recentMemories if those are used.
+
+    if (changed) {
+      _calculateWidgetPriorities();
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _memorySubscription?.cancel();
+    _memoryDeletionSubscription?.cancel();
+    super.dispose();
   }
 }

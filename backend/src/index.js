@@ -117,23 +117,28 @@ fastify.get('/api/v1', async (request, reply) => {
     };
 });
 
+// Register realtime routes FIRST (to avoid global hook interference)
+await fastify.register((await import('@fastify/websocket')).default);
+await fastify.register((await import('./api/routes/realtime.routes.js')).default, { prefix: '/api/v1/ws' });
+
 // Add authentication hook to all /api/v1 routes
 fastify.addHook('preHandler', async (request, reply) => {
-    // Skip auth for health check and public endpoints
+    // Skip auth for health check, public endpoints, and WebSocket upgrades
     if (request.url === '/health' ||
         request.url === '/api/v1' ||
         request.url.startsWith('/docs') ||
         request.url.startsWith('/webhooks') ||
+        request.headers.upgrade === 'websocket' ||
         request.url.startsWith('/api/v1/ws')) {
         return;
     }
 
     // Apply strict authentication to all API routes
-    // Requires valid Firebase token (dev mode: falls back to demo user)
     await authenticate(request, reply);
 });
 
 // Register routes
+
 await fastify.register(memoryRoutes, { prefix: '/api/v1/memory' });
 await fastify.register(inputRoutes, { prefix: '/api/v1/input' });
 await fastify.register(insightsRoutes, { prefix: '/api/v1/insights' });
@@ -151,10 +156,6 @@ await fastify.register(configRoutes, { prefix: '/api/v1/config' });
 await fastify.register(routinesRoutes, { prefix: '/api/v1/routines' });
 // Admin Routes (Debug/Monitoring)
 await fastify.register((await import('./api/routes/admin.routes.js')).default, { prefix: '/api/v1/admin' });
-
-// Realtime WebSocket Routes (NEW)
-await fastify.register((await import('@fastify/websocket')).default);
-await fastify.register((await import('./api/routes/realtime.routes.js')).default, { prefix: '/api/v1/ws' });
 
 // Error handler
 fastify.setErrorHandler((error, request, reply) => {

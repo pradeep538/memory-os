@@ -33,6 +33,7 @@ class MicFab extends StatefulWidget {
 class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+  late Animation<double> _shimmerAnimation;
 
   Timer? _countdownTimer;
   int _elapsedSeconds = 0;
@@ -47,6 +48,9 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.35).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOutSine),
     );
+    _shimmerAnimation = Tween<double>(begin: -1.0, end: 2.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.linear),
+    );
   }
 
   Timer? _holdTimer;
@@ -60,11 +64,36 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
-  void _onTapDown(TapDownDetails details) {
+  void _onTapDown(TapDownDetails details) async {
     if (!widget.isEnabled || _isHolding) return;
+
+    // Set holding state EARLY so onTapCancel can clear it if a dialog ruins the focus
     setState(() => _isHolding = true);
 
-    // Feedback that we are waiting
+    final provider = context.read<InputProvider>();
+    final hasPerm = await provider.hasPermission();
+
+    if (!mounted) return;
+
+    // If permission was denied OR if the gesture was cancelled (e.g. by focus loss during dialog)
+    if (!hasPerm || !_isHolding) {
+      if (_isHolding) setState(() => _isHolding = false);
+
+      // If we were interrupted by a dialog but now have permission,
+      // show a guided message instead of auto-starting.
+      if (hasPerm && !_isHolding) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Microphone ready! Now hold the button to speak."),
+            duration: Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Feedback that we are starting the hold timer
     HapticFeedback.selectionClick();
 
     _holdTimer = Timer(const Duration(milliseconds: 500), () {
@@ -156,6 +185,16 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
     final provider = context.read<InputProvider>();
     final file = await provider.stopRecording();
 
+    // Discard recordings < 0.5s (likely ghost recordings or accidental taps)
+    if (_elapsedSeconds < 1 && file != null) {
+      // If duration is 0 (less than a second), check if it's really useful
+      // Usually ghost recordings are 0-0.3s.
+      debugPrint('🎙️ Recording too short (${_elapsedSeconds}s). Discarding.');
+      await file.delete();
+      provider.cancelRecording();
+      return;
+    }
+
     // Allow even short recordings (e.g. "Lights on")
     if (file != null) {
       // NEW: Custom handler check
@@ -168,24 +207,21 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
 
       await provider.processAudio(file);
 
-      // Removed redundant SnackBar as SuccessToast handles feedback now.
-
       try {
         await file.delete();
       } catch (_) {}
     } else {
-      provider.cancelRecording();
+      // If file is null, we might be in Realtime mode (handled in provider)
+      // Only cancel if we are still in recording state.
+      // If already 'processing', let provider handle completion.
+      if (provider.state == InputState.recording) {
+        provider.cancelRecording();
+      }
     }
   }
 
   void _checkAndStartPulse(InputState state) {
-    if (state == InputState.processing ||
-        state == InputState.enhancing ||
-        state == InputState.transcribing) {
-      if (!_pulseController.isAnimating) {
-        _pulseController.repeat(reverse: true);
-      }
-    } else if (state == InputState.recording) {
+    if (state == InputState.recording) {
       // Handled in _startRecording
     } else {
       if (!_isHolding && _pulseController.isAnimating) {
@@ -232,11 +268,8 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
                       ),
                     ),
 
-                  // Pulse Effect (Recording or Thinking)
-                  if (state == InputState.recording ||
-                      state == InputState.processing ||
-                      state == InputState.enhancing ||
-                      state == InputState.transcribing)
+                  // Pulse Effect (Only during Recording)
+                  if (state == InputState.recording)
                     ScaleTransition(
                       scale: _pulseAnimation,
                       child: Container(
@@ -244,10 +277,7 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
                         height: 56,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: (state == InputState.recording
-                                  ? AppColors.primary
-                                  : AppColors.mindfulness)
-                              .withOpacity(0.3),
+                          color: AppColors.primary.withOpacity(0.3),
                         ),
                       ),
                     ),
@@ -267,51 +297,109 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
                       ),
                     ),
 
-                  // Main Button Container
-                  Container(
-                    width: 56,
-                    height: 56,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      gradient: !widget.isEnabled
-                          ? const LinearGradient(
-                              colors: [Color(0xFFE2E8F0), Color(0xFFE2E8F0)],
-                            )
-                          : state == InputState.error
-                              ? LinearGradient(
-                                  colors: [AppColors.error, AppColors.error],
+                  AnimatedBuilder(
+                    animation: _shimmerAnimation,
+                    builder: (context, child) {
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 600),
+                        curve: Curves.elasticOut,
+                        width: (state == InputState.processing ||
+                                state == InputState.enhancing ||
+                                state == InputState.transcribing)
+                            ? 170 // Slightly more room
+                            : 56,
+                        height: 56,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          gradient: !widget.isEnabled
+                              ? const LinearGradient(
+                                  colors: [
+                                    Color(0xFFE2E8F0),
+                                    Color(0xFFE2E8F0)
+                                  ],
                                 )
-                              : (state == InputState.processing ||
-                                      state == InputState.enhancing ||
-                                      state == InputState.transcribing)
-                                  ? const LinearGradient(
+                              : state == InputState.error
+                                  ? LinearGradient(
                                       colors: [
-                                        AppColors.mindfulness,
-                                        AppColors.mindfulnessLight
+                                        AppColors.error,
+                                        AppColors.error
                                       ],
                                     )
-                                  : state == InputState.success
+                                  : (state == InputState.processing ||
+                                          state == InputState.enhancing ||
+                                          state == InputState.transcribing)
                                       ? LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
                                           colors: [
-                                            AppColors.success,
-                                            AppColors.success
+                                            AppColors.primary,
+                                            AppColors.primaryLight
+                                                .withOpacity(0.6),
+                                            AppColors.primary,
+                                          ],
+                                          stops: [
+                                            (_shimmerAnimation.value - 0.3)
+                                                .clamp(0.0, 1.0),
+                                            _shimmerAnimation.value
+                                                .clamp(0.0, 1.0),
+                                            (_shimmerAnimation.value + 0.3)
+                                                .clamp(0.0, 1.0),
                                           ],
                                         )
-                                      : AppColors.primaryGradient,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        if (widget.isEnabled)
-                          BoxShadow(
-                            color: (state == InputState.error
-                                    ? AppColors.error
-                                    : AppColors.primary)
-                                .withOpacity(0.3),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                      ],
+                                      : state == InputState.success
+                                          ? LinearGradient(
+                                              colors: [
+                                                AppColors.success,
+                                                AppColors.success
+                                              ],
+                                            )
+                                          : AppColors.primaryGradient,
+                          borderRadius: (state == InputState.processing ||
+                                  state == InputState.enhancing ||
+                                  state == InputState.transcribing)
+                              ? BorderRadius.circular(20)
+                              : BorderRadius.circular(28),
+                          boxShadow: [
+                            if (widget.isEnabled)
+                              BoxShadow(
+                                color: (state == InputState.error
+                                        ? AppColors.error
+                                        : AppColors.primary)
+                                    .withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                          ],
+                        ),
+                        child: child,
+                      );
+                    },
+                    child: Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildIcon(state, inputProvider.activeSource),
+                          if (state == InputState.processing ||
+                              state == InputState.enhancing ||
+                              state == InputState.transcribing) ...[
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: Text(
+                                inputProvider.statusMessage ?? 'Analyzing...',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.2,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.clip,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                    child: _buildIcon(state, inputProvider.activeSource),
                   ),
                 ],
               ),
@@ -337,16 +425,9 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
         (state == InputState.processing ||
             state == InputState.transcribing ||
             state == InputState.enhancing)) {
-      return TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.0, end: 1.0),
-        duration: const Duration(seconds: 2),
-        builder: (context, value, child) {
-          return const Icon(
-            Icons.auto_awesome_rounded,
-            color: Colors.white,
-            size: 28,
-          );
-        },
+      return ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 28),
+        child: _VerticalAnalysisIcon(),
       );
     }
 
@@ -355,7 +436,6 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
     }
 
     if (state == InputState.recording) {
-      // Return mic icon (active state implied by external timer and pulse)
       return const Icon(Icons.mic, color: Colors.white, size: 28);
     }
 
@@ -367,7 +447,58 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
       );
     }
 
-    // Idle or Recording (Recording shows mic)
     return const Icon(Icons.mic_rounded, color: Colors.white, size: 28);
+  }
+}
+
+/// A vertical animated frequency line for analysis state
+class _VerticalAnalysisIcon extends StatefulWidget {
+  @override
+  State<_VerticalAnalysisIcon> createState() => _VerticalAnalysisIconState();
+}
+
+class _VerticalAnalysisIconState extends State<_VerticalAnalysisIcon>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(3, (index) {
+        return AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final delay = index * 0.2;
+            final val =
+                (Curves.easeInOut.transform((_controller.value + delay) % 1.0));
+            return Container(
+              width: 3.5,
+              height: 10 + (10 * val),
+              margin: const EdgeInsets.symmetric(horizontal: 1.5),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            );
+          },
+        );
+      }),
+    );
   }
 }

@@ -29,7 +29,8 @@ Return ONLY valid JSON in this format:
 {
   "query_type": "CHECK_TODAY" | "CHECK_YESTERDAY" | "FIND_LAST" | "CALCULATE_FREQUENCY" | "COUNT_TOTAL" | "SUM_TOTAL",
   "subject": "the main activity (e.g., coffee, gym, medication)",
-  "search_keywords": ["keyword1", "keyword2"],
+  "search_keywords": ["keyword1", "synonym1", "related_term"],
+  "notes": "CRITICAL: Automatically include 3-5 synonyms/related terms for broad matching. Example: 'saloon' -> ['saloon', 'haircut', 'shaving', 'barber', 'parlour']",
   "answer_template": {
     "positive": "Natural language template for found. Use {raw_input} to show exact record, {date}, {time}, {days_ago}, {count}, {total}, or {formatted_total} where appropriate.",
     "negative": "Natural language template for not found"
@@ -187,13 +188,15 @@ User Question: "${text}"`;
 
         if (result.rows.length > 0) {
             const row = result.rows[0];
+            // Semantic Date Logic
+            const semanticDate = row.normalized_data?.event_date ? new Date(row.normalized_data.event_date) : new Date(row.created_at);
             return {
                 found: true,
                 data: {
                     ...row,
-                    date: this.formatDate(row.created_at),
+                    date: this.formatDate(semanticDate),
                     time: this.formatTime(row.created_at),
-                    days_ago: this.calculateDaysAgo(row.created_at)
+                    days_ago: this.calculateDaysAgo(semanticDate)
                 }
             };
         }
@@ -344,9 +347,15 @@ User Question: "${text}"`;
         if (!template) return "No template provided";
         const answerTemplate = found ? (template.positive || "Found") : (template.negative || "Not found");
 
-        // Replace placeholders (e.g., {date}, {time}, {count}, {raw_input})
+        // 1. Create aliases for robustness
+        const safeData = { ...data };
+        if (safeData.count !== undefined && safeData.total === undefined) safeData.total = safeData.count;
+        if (safeData.total !== undefined && safeData.count === undefined) safeData.count = safeData.total;
+        if (safeData.total !== undefined && safeData.amount === undefined) safeData.amount = safeData.total;
+
+        // 2. Replace placeholders (e.g., {date}, {time}, {count}, {raw_input}, {total})
         let answer = answerTemplate.replace(/\{(\w+)\}/g, (match, key) => {
-            return data?.[key] !== undefined ? data[key] : match;
+            return safeData?.[key] !== undefined ? safeData[key] : match;
         });
 
         return answer;

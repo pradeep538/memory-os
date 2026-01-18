@@ -234,5 +234,26 @@ class MemoryModel {
 
         return stats;
     }
+
+    /**
+     * Delete memory unit
+     */
+    static async delete(id, userId) {
+        // Clean up references that don't have ON DELETE CASCADE
+        // 1. Habit completions (hard delete completion if it was tied to this memory)
+        await db.query('DELETE FROM habit_completions WHERE memory_id = $1', [id]);
+
+        // 2. Sessions & Notifications (nullify reference)
+        await db.query('UPDATE sessions SET memory_id = NULL WHERE memory_id = $1', [id]);
+        await db.query('UPDATE notifications SET related_memory_id = NULL WHERE related_memory_id = $1', [id]);
+
+        const query = `
+            DELETE FROM memory_units
+            WHERE id = $1 AND user_id = $2
+            RETURNING *
+        `;
+        const result = await db.query(query, [id, userId]);
+        return result.rows[0];
+    }
 }
 export default MemoryModel;

@@ -62,6 +62,9 @@ class InputProvider extends ChangeNotifier {
   String? _error;
   String? get error => _error;
 
+  String? _statusMessage;
+  String? get statusMessage => _statusMessage;
+
   // Recording state
   int _recordingDuration = 0;
   int get recordingDuration => _recordingDuration;
@@ -116,6 +119,7 @@ class InputProvider extends ChangeNotifier {
     _error = null;
     _retryCount = 0;
     _lastFeedbackMessage = null;
+    _statusMessage = null;
     _updateState(InputState.idle);
     _activeSource = null; // Reset source
     notifyListeners();
@@ -129,7 +133,7 @@ class InputProvider extends ChangeNotifier {
   }
 
   void _handleWebSocketMessage(Map<String, dynamic> data) {
-    debugPrint('📩 WS Message Received: $data'); // DEBUG LOG
+    debugPrint('🧬 WS INCOMING: $data'); // DIAGNOSTIC LOG
 
     if (data['type'] == 'result' && data['success'] == true) {
       debugPrint('✅ WS Success condition met');
@@ -146,27 +150,73 @@ class InputProvider extends ChangeNotifier {
             resultData['confirmation'] ?? resultData['confirmation_message'],
         isQuery: resultData['is_query'] ?? false,
         answer: resultData['answer'],
+        memory: resultData['memory'] != null
+            ? Memory.fromJson(resultData['memory'])
+            : null,
       );
 
       if (result.needsConfirmation) {
         _updateState(InputState.confirming);
         _pendingResult = result;
       } else {
-        _lastMemory = null;
+        _lastMemory = result.memory;
         _lastFeedbackMessage = result.answer ?? result.shortResponse ?? "Saved";
         _pendingResult = null;
         _handleSuccess();
         syncPendingInputs();
       }
       notifyListeners();
+    } else if (data['type'] == 'answer') {
+      debugPrint('✅ WS Answer received: ${data['answer']}');
+      _lastFeedbackMessage = data['answer'];
+      _lastMemory = null;
+      _handleSuccess();
+      notifyListeners();
     } else if (data['type'] == 'error') {
+      _statusMessage = null;
       _handleError(data['message'] ?? 'Processing failed');
     } else if (data['type'] == 'status') {
-      debugPrint('📥 Received: ${data['status']}');
+      debugPrint('📥 Received status: ${data['status']}');
+      _statusMessage = _mapStatusToMessage(data['status']);
+      // If we get status, we are definitely NOT timing out yet
+      _resiliencyTimer?.cancel();
+      _startResiliencyTimer(); // Reset timer
+      notifyListeners();
+    }
+  }
+
+  String _mapStatusToMessage(String status) {
+    switch (status) {
+      case 'processing':
+        return 'Processing...';
+      case 'uploading':
+        return 'Uploading...';
+      case 'analyzing':
+        return 'Analyzing...';
+      case 'saving':
+        return 'Saving...';
+      default:
+        return 'Working...';
     }
   }
 
   // ... existing members ...
+
+  // --- Permission Management ---
+
+  /// Check if microphone permission is already granted
+  Future<bool> hasPermission() async {
+    return await _audioRecorder.hasPermission();
+  }
+
+  /// Explicitly request microphone permission
+  Future<bool> requestPermission() async {
+    final granted = await _audioRecorder.hasPermission();
+    if (!granted) {
+      notifyListeners(); // Ensure UI can react if needed
+    }
+    return granted;
+  }
 
   // --- Recording Management ---
 
@@ -174,7 +224,8 @@ class InputProvider extends ChangeNotifier {
   Future<bool> startRecording() async {
     try {
       if (!await _audioRecorder.hasPermission()) {
-        _handleError('Microphone permission denied');
+        _handleError(
+            'Microphone permission required. Please hold to record again after allowing.');
         return false;
       }
 
@@ -331,7 +382,7 @@ class InputProvider extends ChangeNotifier {
 
   void _startResiliencyTimer() {
     _resiliencyTimer?.cancel();
-    _resiliencyTimer = Timer(const Duration(seconds: 8), () async {
+    _resiliencyTimer = Timer(const Duration(seconds: 30), () async {
       if (_state == InputState.processing) {
         debugPrint('⏳ WS Processing timeout. Falling back to offline storage.');
         await _fallbackToOfflineAudio();
@@ -399,9 +450,18 @@ class InputProvider extends ChangeNotifier {
 
   void _handleSuccess() {
     _updateState(InputState.success);
+
+    // Notify memory creation for real-time feed updates
+    if (_lastMemory != null) {
+      debugPrint(
+          '🪄 InputProvider: Notifying MemoryService of new memory: ${_lastMemory!.id}');
+      _memoryService.notifyMemoryCreated(_lastMemory!);
+    }
+
     notifyListeners();
 
     debugPrint('InputProvider: handled success, scheduling reset...');
+    _statusMessage = null;
     // Auto-reset after 3 seconds
     Future.delayed(const Duration(seconds: 3), () {
       if (_state == InputState.success) {
@@ -493,11 +553,15 @@ class InputProvider extends ChangeNotifier {
       content: content,
       timestamp: DateTime.now().millisecondsSinceEpoch,
     ));
-    // Notify user via error message but softer
-    _handleError("Network issue. Saved to queue & will retry automatically.");
+
+    // Notify user but don't hard-error (which turns button red)
+    // Instead, move to idle and show a toast/status via feedback message
+    _statusMessage = "Network unstable. Saved to local queue.";
+    _updateState(InputState.idle);
+    notifyListeners();
 
     // Try to sync in background after a delay
-    Future.delayed(const Duration(seconds: 30), syncPendingInputs);
+    Future.delayed(const Duration(seconds: 15), syncPendingInputs);
   }
 
   // --- Processing ---
@@ -689,6 +753,7 @@ class InputProvider extends ChangeNotifier {
       final response = await _memoryService.deleteMemory(id);
       if (response.success) {
         _lastFeedbackMessage = "Memory deleted";
+        _memoryService.notifyMemoryDeleted(id);
       } else {
         _handleError("Failed to undo memory: ${response.error}");
       }

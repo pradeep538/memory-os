@@ -14,6 +14,7 @@ const __dirname = path.dirname(__filename);
  * 1. Upload audio file
  * 2. Transcribe + enhance + extract entities in one call
  * 3. Calculate confidence score
+ * 4. Classify intent (Log vs Query)
  */
 class AudioEnhancementService {
     constructor() {
@@ -102,7 +103,7 @@ class AudioEnhancementService {
 
             } else {
                 // Large file path: Upload to Files API
-                console.log('File is large (>10MB), using Files API...');
+                console.log('Using Gemini Files API for reliable processing (Forcing for all audio)...');
 
                 // Step 1: Save buffer to temp file
                 const filename = `audio_${Date.now()}.${this.getExtension(mimeType)}`;
@@ -209,9 +210,6 @@ class AudioEnhancementService {
     }
 
     /**
-     * Wait for Gemini to process uploaded file
-     */
-    /**
      * Wait for Gemini to process uploaded file (Deprecated: causing SDK issues)
      */
     async waitForFileProcessing(fileName, maxAttempts = 10) {
@@ -223,17 +221,19 @@ class AudioEnhancementService {
      * Build enhancement prompt for audio
      */
     buildAudioEnhancementPrompt() {
-        return `You are processing a voice recording from a user logging their daily activities.
+        return `You are an intelligent assistant processing voice input.
 
 Your task:
 1. Transcribe the audio accurately
-2. Enhance the transcription to be grammatically complete
-3. Extract key entities and information
-4. Detect the activity category
+2. Classify intent: "log" (logging a memory/activity) OR "query" (asking a question/requesting info)
+3. Enhance the transcription to be grammatically complete
+4. Extract key entities and information
+5. Detect the activity category (if intent is "log")
 
 Respond ONLY with valid JSON in this exact format:
 {
   "transcription": "exact words spoken",
+  "intent": "log" | "query",
   "enhanced_text": "grammatically complete sentence",
   "detected_category": "fitness|finance|routine|health|mindfulness|generic",
   "detected_entities": {
@@ -242,7 +242,8 @@ Respond ONLY with valid JSON in this exact format:
     "activity_type": "string or null",
     "location": "string or null",
     "intensity": "string or null",
-    "mood": "string or null"
+    "mood": "string or null",
+    "event_date": "ISO8601 date string (YYYY-MM-DD) if explicitly mentioned (e.g. 'yesterday', 'last friday', 'jan 1st') else null"
   },
   "semantic_confidence": 0.0 to 1.0,
   "audio_quality": "excellent|good|fair|poor",
@@ -252,42 +253,59 @@ Respond ONLY with valid JSON in this exact format:
 }
 
 CRITICAL RULES:
-1. If the audio is completely silent, contains only static/noise, or has no discernable speech, set "is_speech" to false, "transcription" to null, and "detected_category" to "none". 
-2. DO NOT hallucinate activities like "meditation" or "sleeping" if you don't hear them explicitly described. 
-3. "none" is a valid category for silence.
+1. If the input is a question like "How much did I spend?" or "Show me my workouts", set "intent" to "query".
+2. If the input is a statement like "I spent $50" or "I went running", set "intent" to "log".
+3. If the audio is completely silent or noise, set "is_speech" to false.
+4. **SMART NUMBER EXTRACTION**: Context is key.
+   - "Spent 500" (No unit) -> 'amount: 500' (Finance)
+   - "Spent 5 hours" -> 'duration_minutes: 300' (Activity, NOT Finance)
+   - "Ran 5 km" -> 'distance: 5', 'amount: null'
+5. **FINANCIAL TRIGGERS**: "spent", "paid", "cost", "bought" -> strongly imply Finance UNLESS the unit is explicitly time.
+6. **MANDATORY**: If the context is clearly financial (e.g. "paid for taxi"), you MUST extract the number as 'amount'.
+7. **UNIT CONVERSION**:
+   - "10k" -> amount: 10000
+   - "5M" -> amount: 5000000
+   - "Half a million" -> amount: 500000
+   - "20,000" -> amount: 20000 (REMOVE COMMAS)
+8. **NUMERIC FORMAT**: 'amount' must be a pure number (no strings, no commas).
 
 Examples:
 
-Audio: "went to the gym did leg workout for about an hour"
+Audio: "How much did I spend on food?"
 Output: {
-  "transcription": "went to the gym did leg workout for about an hour",
-  "enhanced_text": "Went to the gym and did a leg workout for about 1 hour",
-  "detected_category": "fitness",
-  "detected_entities": {
-    "duration_minutes": 60,
-    "activity_type": "leg workout",
-    "location": "gym",
-    "intensity": null,
-    "mood": null
-  },
-  "semantic_confidence": 0.95,
-  "audio_quality": "excellent",
-  "reasoning": "Clear fitness activity with duration and location"
+  "transcription": "How much did I spend on food?",
+  "intent": "query",
+  "enhanced_text": "How much did I spend on food?",
+  "detected_category": "finance",
+  "semantic_confidence": 0.95
 }
 
-Audio: "spent forty five dollars on groceries"
+Audio: "I spent 800 at Starbucks"
 Output: {
-  "transcription": "spent forty five dollars on groceries",
-  "enhanced_text": "Spent $45 on groceries",
+  "transcription": "I spent 800 at Starbucks",
+  "intent": "log",
+  "enhanced_text": "I spent 800 at Starbucks.",
   "detected_category": "finance",
   "detected_entities": {
-    "amount": 45,
-    "activity_type": "purchase",
-    "location": null
+    "amount": 800,
+    "activity_type": "expense",
+    "location": "Starbucks"
   },
-  "semantic_confidence": 0.85,
-  "audio_quality": "good",
-  "reasoning": "Clear transaction with amount"
+  "semantic_confidence": 0.99
+}
+
+Audio: "Paid 50 for taxi"
+Output: {
+  "transcription": "Paid 50 for taxi",
+  "intent": "log",
+  "enhanced_text": "Paid 50 for taxi.",
+  "detected_category": "finance",
+  "detected_entities": {
+    "amount": 50,
+    "activity_type": "expense",
+    "location": "taxi"
+  },
+  "semantic_confidence": 0.98
 }
 
 Now process the audio and respond ONLY with JSON.`;
@@ -311,6 +329,7 @@ Now process the audio and respond ONLY with JSON.`;
 
             return {
                 transcription: parsed.transcription || '',
+                intent: parsed.intent || 'log', // Default to log if undefined
                 enhanced_text: parsed.enhanced_text || parsed.transcription || '',
                 detected_category: parsed.detected_category || 'generic',
                 detected_entities: parsed.detected_entities || {},
@@ -326,6 +345,7 @@ Now process the audio and respond ONLY with JSON.`;
 
             return {
                 transcription: '',
+                intent: 'log',
                 enhanced_text: '',
                 detected_category: 'generic',
                 detected_entities: {},

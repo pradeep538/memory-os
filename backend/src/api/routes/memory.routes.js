@@ -127,6 +127,30 @@ async function memoryRoutes(fastify, options) {
             }
         }
     }, memoryController.correct.bind(memoryController));
+
+    // Delete memory
+    fastify.delete('/:id', {
+        preHandler: auth.authenticate,
+        schema: {
+            description: 'Delete a specific memory by ID',
+            tags: ['memory'],
+            params: {
+                type: 'object',
+                properties: {
+                    id: { type: 'string', format: 'uuid' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                }
+            }
+        }
+    }, memoryController.remove.bind(memoryController));
 }
 
 export default memoryRoutes;

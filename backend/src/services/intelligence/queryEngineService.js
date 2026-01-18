@@ -26,8 +26,8 @@ class QueryEngineService {
             if (!intent.success) {
                 return {
                     success: false,
-                    error: 'Could not understand query',
-                    suggestion: 'Try asking: How much did I spend on food this month?'
+                    answer: "I couldn't understand that question. Try asking 'How much did I spend on food?'",
+                    error: 'Could not understand query'
                 };
             }
 
@@ -37,6 +37,7 @@ class QueryEngineService {
             if (!sqlQuery) {
                 return {
                     success: false,
+                    answer: "I understood the intent but couldn't build a database query for it.",
                     error: 'Could not build query for this intent'
                 };
             }
@@ -60,6 +61,7 @@ class QueryEngineService {
             console.error('Query engine error:', error);
             return {
                 success: false,
+                answer: "I encountered an error processing your query.",
                 error: error.message
             };
         }
@@ -105,8 +107,9 @@ Now extract intent from the question. Return ONLY the JSON.
 `;
 
         try {
-            const result = await llmService.model.generateContent(prompt);
-            const text = result.response.text().trim();
+            // FIX: Use generateStructuredResponse instead of raw SDK call to handle Config
+            const textRaw = await llmService.generateStructuredResponse(prompt);
+            const text = textRaw.trim();
 
             // Extract JSON
             let jsonText = text;
@@ -156,7 +159,8 @@ Now extract intent from the question. Return ONLY the JSON.
             where.push(`(
         normalized_data->>'activity' ILIKE $${paramIndex} OR
         normalized_data->>'item' ILIKE $${paramIndex} OR
-        normalized_data->>'subcategory' ILIKE $${paramIndex}
+        normalized_data->>'subcategory' ILIKE $${paramIndex} OR
+        raw_input ILIKE $${paramIndex}
       )`);
             params.push(`%${filter}%`);
             paramIndex++;

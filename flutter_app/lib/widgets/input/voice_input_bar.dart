@@ -75,6 +75,8 @@ class _VoiceInputBarState extends State<VoiceInputBar> {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // status message now handled by MicFab
+
             // Marquee examples (above input bar), show only when idle
             if (!_hasText &&
                 !isProcessing &&

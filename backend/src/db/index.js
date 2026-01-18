@@ -4,9 +4,10 @@ import config from '../config/index.js';
 
 const pool = new Pool({
     connectionString: config.database.url,
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    max: 10, // Reduced from 20 to prevent MaxClientsInSessionMode error
+    idleTimeoutMillis: 10000, // Close idle clients faster
+    connectionTimeoutMillis: 5000,
+    allowExitOnIdle: true
 });
 
 pool.on('error', (err) => {

@@ -58,6 +58,15 @@ class _FeedScreenState extends State<FeedScreen> {
       _pollFeedback();
       // Reload feed to update habits, score, memories
       context.read<FeedProvider>().loadFeed();
+      // Clear generic success after a delay if feedback also arrived
+      if (mounted) {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted && _latestFeedback != null) {
+            // Force re-render to hide generic toast in favor of engagement toast
+            setState(() {});
+          }
+        });
+      }
     }
     _lastInputState = currentState;
   }
@@ -101,9 +110,21 @@ class _FeedScreenState extends State<FeedScreen> {
                 // App bar
                 _buildAppBar(),
 
-                // Daily Brief (Engagement Feed)
-                EngagementFeed(engagementService: _engagementService),
+                // Daily Brief (Engagement Feed) - Only show if Engagement Widget is NOT present (Onboarding state)
+                Consumer<FeedProvider>(
+                  builder: (context, feedProvider, _) {
+                    final hasEngagementScore = feedProvider.widgets.any(
+                      (w) => w.type == FeedWidgetType.engagementScore,
+                    );
 
+                    if (hasEngagementScore) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return EngagementFeed(
+                        engagementService: _engagementService);
+                  },
+                ),
                 // Feed content
                 Expanded(
                   child: Consumer<FeedProvider>(
@@ -151,6 +172,10 @@ class _FeedScreenState extends State<FeedScreen> {
                 if (inputProvider.state == InputState.success &&
                     (inputProvider.lastMemory != null ||
                         inputProvider.lastFeedbackMessage != null)) {
+                  // If we have specific engagement feedback, don't show the generic "Logged" toast
+                  // as they often clash or appear too close together.
+                  if (_latestFeedback != null) return const SizedBox.shrink();
+
                   return Positioned(
                     left: 0,
                     right: 0,
@@ -296,6 +321,7 @@ class _FeedScreenState extends State<FeedScreen> {
           memories: widgetData.data as List<Memory>,
           onTap: () => _navigateToMemories(),
           onMemoryTap: (memory) => _navigateToMemoryDetail(memory),
+          onDelete: (memory) => _deleteMemory(memory),
         );
 
       case FeedWidgetType.engagementScore:
@@ -390,7 +416,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -563,5 +589,41 @@ class _FeedScreenState extends State<FeedScreen> {
         builder: (context) => const InputModalScreen(),
       ),
     );
+  }
+
+  void _deleteMemory(Memory memory) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Memory'),
+        content: const Text('Are you sure you want to delete this memory?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final app = context.read<AppProvider>();
+      final response = await app.memoryService.deleteMemory(memory.id);
+      if (response.success) {
+        // Broadcast deletion
+        app.memoryService.notifyMemoryDeleted(memory.id);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete: ${response.error}')),
+          );
+        }
+      }
+    }
   }
 }

@@ -1,7 +1,6 @@
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert';
 import 'dart:async';
-import 'dart:io';
 
 /// WebSocket Service for Kairo Chat
 /// Handles real-time messaging with the backend
@@ -24,10 +23,8 @@ class WebSocketService {
   }) : wsUrl = customUrl ?? _getDefaultUrl();
 
   static String _getDefaultUrl() {
-    if (Platform.isAndroid) {
-      return 'ws://localhost:3000/api/v1/ws/input'; // Android Emulator
-    }
-    return 'ws://localhost:3000/api/v1/ws/input'; // iOS Simulator / Web
+    // For real device with adb reverse tcp:3000 tcp:3000
+    return 'ws://localhost:3000/api/v1/ws/input';
   }
 
   /// Connect to WebSocket server

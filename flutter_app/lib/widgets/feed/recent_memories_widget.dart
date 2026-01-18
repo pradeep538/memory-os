@@ -12,12 +12,14 @@ class RecentMemoriesWidget extends StatelessWidget {
   final List<Memory> memories;
   final VoidCallback? onTap;
   final Function(Memory)? onMemoryTap;
+  final Function(Memory)? onDelete;
 
   const RecentMemoriesWidget({
     super.key,
     required this.memories,
     this.onTap,
     this.onMemoryTap,
+    this.onDelete,
   });
 
   @override
@@ -63,6 +65,7 @@ class RecentMemoriesWidget extends StatelessWidget {
             ...memories.take(5).map((memory) => _MemoryRow(
                   memory: memory,
                   onTap: () => onMemoryTap?.call(memory),
+                  onDelete: () => onDelete?.call(memory),
                 )),
           ] else ...[
             const SizedBox(height: AppSpacing.lg),
@@ -99,10 +102,12 @@ class RecentMemoriesWidget extends StatelessWidget {
 class _MemoryRow extends StatelessWidget {
   final Memory memory;
   final VoidCallback? onTap;
+  final VoidCallback? onDelete;
 
   const _MemoryRow({
     required this.memory,
     this.onTap,
+    this.onDelete,
   });
 
   @override
@@ -214,6 +219,20 @@ class _MemoryRow extends StatelessWidget {
                 ],
               ),
             ),
+
+            // Delete Action
+            if (!isProcessing)
+              IconButton(
+                onPressed: onDelete,
+                icon: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 20,
+                  color: AppColors.textTertiary.withOpacity(0.5),
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Delete Memory',
+              ),
           ],
         ),
       ),

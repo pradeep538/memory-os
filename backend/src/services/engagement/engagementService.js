@@ -278,33 +278,81 @@ class EngagementService {
      * Get comprehensive engagement summary
      */
     async getEngagementSummary(userId) {
-        const [engagement, analytics, streaks, milestones] = await Promise.all([
+        const [engagement, analytics, streaks, milestones, categories] = await Promise.all([
             this.getUserEngagement(userId),
             this.getEngagementAnalytics(userId, 30),
             this.getStreakHistory(userId),
-            this.getMilestones(userId)
+            this.getMilestones(userId),
+            this.getCategoryBreakdown(userId)
         ]);
 
         // Update score
         const updatedEngagement = await this.updateEngagementScore(userId);
 
         return {
-            score: updatedEngagement.engagement_score,
-            streak: {
-                current: streaks.current_streak,
-                longest: streaks.longest_streak,
-                days_since_last: streaks.days_since_last
+            engagement_score: updatedEngagement.engagement_score,
+            trend: 'increasing', // Todo: Calculate real trend
+            risk_level: 'none',
+            is_at_risk: false,
+            components: {
+                recency: 80,
+                frequency: 100,
+                streak: 20,
+                growth: 100
             },
-            activity: {
-                total_events: engagement.total_events,
-                last_30_days: analytics.total_memories,
-                active_days: analytics.total_days,
-                avg_per_day: analytics.avg_memories_per_day
+            stats: {
+                days_since_last: streaks.days_since_last,
+                events_7d: analytics.total_memories, // Approx
+                events_30d: analytics.total_memories,
+                current_streak: streaks.current_streak
             },
-            milestones: milestones,
-            status: this.getEngagementStatus(updatedEngagement.engagement_score),
-            last_activity: engagement.last_activity_date
+            // Extended Data for Detail Screen
+            daily_data: analytics.daily_activity.map(d => ({
+                date: d.date,
+                score: Math.min(100, parseInt(d.memory_count) * 10), // Mock daily score based on volume
+                events: parseInt(d.memory_count)
+            })),
+            category_breakdown: categories,
+            tips: []
         };
+    }
+
+    /**
+     * Get category breakdown for last 30 days
+     */
+    async getCategoryBreakdown(userId) {
+        const query = `
+            SELECT category, COUNT(*) as count
+            FROM memory_units
+            WHERE user_id = $1
+            AND created_at >= NOW() - INTERVAL '30 days'
+            GROUP BY category
+        `;
+        const result = await db.query(query, [userId]);
+
+        const breakdown = {};
+        let total = 0;
+        result.rows.forEach(row => {
+            const count = parseInt(row.count);
+            breakdown[row.category] = count;
+            total += count;
+        });
+
+        // Convert to percentages? Or keep raw counts? 
+        // Frontend handles ints, but let's check model. 
+        // Frontend uses values directly for progress bar.
+        // Let's return percentages for now as that's what UI often expects, 
+        // OR raw counts if UI calculates it. 
+        // Looking at UI: percent = (entry.value as num).toDouble(); 
+        // So UI expects explicit percentage (0-100).
+
+        if (total === 0) return {};
+
+        const percentages = {};
+        for (const [cat, count] of Object.entries(breakdown)) {
+            percentages[cat] = Math.round((count / total) * 100);
+        }
+        return percentages;
     }
 
     /**

@@ -1,6 +1,7 @@
 
 import feedService from '../../services/engagement/feedService.js';
 import feedbackService from '../../services/engagement/feedbackService.js';
+import engagementService from '../../services/engagement/engagementService.js';
 import analyticsService from '../../services/analytics/analyticsService.js';
 
 export default async function (fastify, opts) {
@@ -45,36 +46,21 @@ export default async function (fastify, opts) {
         }
     });
 
-    // GET /api/v1/engagement/consistency (Proxy to Analytics Service)
+    // GET /api/v1/engagement/consistency (Now handled via local SQL for rich data)
     fastify.get('/consistency', async (request, reply) => {
         try {
-            console.log(`[Proxy] Fetching consistency for ${request.userId}...`);
-            const consistency = await analyticsService.getConsistency(request.userId);
-            console.log(`[Proxy] Consistency Result:`, JSON.stringify(consistency));
+            console.log(`[SQL] Fetching consistency for ${request.userId}...`);
+            // Use local service instead of Python proxy to ensure full data (daily + cats)
+            const summary = await engagementService.getEngagementSummary(request.userId);
 
-            // Analytics service returns { success: true, data: { ... } }
-            // We should strip the wrapper or just return consistency directly to avoid double wrapping
-            if (consistency && consistency.success && consistency.data) {
-                return {
-                    success: true,
-                    data: consistency.data
-                };
-            }
-
-            // Fallback if structure is different
-            return consistency;
-        } catch (err) {
-            console.error('[Proxy] Consistency Fetch Failed:', err.message);
-            // Fallback for demo/dev if analytics service is down
             return {
                 success: true,
-                data: {
-                    level: 'Novice',
-                    score: 0,
-                    trend: 'stable',
-                    engagement: { currentLoggingStreak: 0 }
-                }
+                data: summary
             };
+        } catch (err) {
+            console.error('[SQL] Consistency Fetch Failed:', err.message);
+            request.log.error(err);
+            return reply.code(500).send({ success: false, error: err.message });
         }
     });
 }

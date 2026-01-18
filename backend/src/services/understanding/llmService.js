@@ -14,6 +14,11 @@ class LLMService {
         });
     }
 
+    // Explicitly expose model accessor for other services
+    get model() {
+        return this.ai.models;
+    }
+
     async evaluateNovelty(newPattern, historyContext, timezone = 'UTC') {
         const timeService = (await import('../time/timeService.js')).default;
 
@@ -27,14 +32,6 @@ class LLMService {
             console.log(`   🕒 Time Logic: Peak ${newPattern.evidence.peak_hour} UTC -> ${localTime} (${timezone})`);
             timeContext = `(HINT: The pattern peak hour ${newPattern.evidence.peak_hour}:00 UTC corresponds to **${localTime}** in the user's timezone. Use this!)`;
         }
-
-        // Wait, TimeService expects userId to look up timezone.
-        // But here I'm passing 'timezone' string directly.
-        // I should stick to the string logic or update TimeService to allow "userId OR timezoneString".
-        // Let's stick to prompt instruction for now, but use TimeService if I can.
-        // Actually, previous implementation passed 'timezone' string. 
-        // Let's keep the STRONG prompt instruction, it is robust enough if LLM obeys.
-        // But I will clean up the code to look cleaner.
 
         const prompt = `
 You are a "Novelty Engine" for a personal AI. 

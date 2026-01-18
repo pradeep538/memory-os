@@ -393,17 +393,24 @@ class _SuccessToastState extends State<SuccessToast>
           child: SlideTransition(
             position: _slideAnimation,
             child: Container(
-              margin: const EdgeInsets.all(AppSpacing.md),
-              padding: const EdgeInsets.symmetric(
+              margin: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.md,
-                vertical: AppSpacing.md, // Slightly more padding
+                vertical: AppSpacing.sm,
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
               ),
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                color: const Color(0xFF1E293B).withOpacity(0.95), // Slate 800
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.1),
+                  width: 1,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.4),
+                    color: Colors.black.withOpacity(0.4),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
@@ -414,33 +421,35 @@ class _SuccessToastState extends State<SuccessToast>
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: AppColors.success.withOpacity(0.2),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
-                      Icons.check_circle_rounded,
-                      color: AppColors.textOnPrimary,
-                      size: 20,
+                      Icons.check_rounded,
+                      color: AppColors.success,
+                      size: 18,
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.md),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'LOGGED!',
+                          'Success',
                           style: AppTypography.label.copyWith(
-                            color: AppColors.textOnPrimary,
-                            letterSpacing: 1.2,
-                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            fontSize: 10,
+                            letterSpacing: 1.0,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
                           widget.text,
                           style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.textOnPrimary.withOpacity(0.95),
+                            color: Colors.white.withOpacity(0.9),
+                            fontWeight: FontWeight.w500,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -449,18 +458,24 @@ class _SuccessToastState extends State<SuccessToast>
                     ),
                   ),
                   if (widget.onUndo != null) ...[
-                    const SizedBox(width: AppSpacing.sm),
+                    const SizedBox(width: 8),
                     TextButton(
                       onPressed: widget.onUndo,
                       style: TextButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.15),
-                        foregroundColor: AppColors.textOnPrimary,
+                        backgroundColor: Colors.white.withOpacity(0.1),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         shape: RoundedRectangleBorder(
                           borderRadius:
                               BorderRadius.circular(AppSpacing.radiusSm),
                         ),
                       ),
-                      child: const Text('Undo'),
+                      child: const Text('Undo', style: TextStyle(fontSize: 12)),
                     ),
                   ],
                 ],

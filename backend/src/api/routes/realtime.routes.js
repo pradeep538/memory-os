@@ -1,4 +1,5 @@
 import audioEnhancementService from '../../services/input/audioEnhancementService.js';
+import queryEngineService from '../../services/intelligence/queryEngineService.js';
 import MemoryModel from '../../models/memory.model.js';
 import storageService from '../../services/storage/storageService.js';
 import queue from '../../lib/queue.js';
@@ -6,12 +7,14 @@ import db from '../../db/index.js';
 
 async function realtimeRoutes(fastify, options) {
     fastify.get('/input', { websocket: true }, async (connection, req) => {
+        console.log(`📡 WS Handshake: Upgrade=${req.headers.upgrade}, URL=${req.url}`);
         // Handle different @fastify/websocket versions
         const socket = connection.socket || connection;
 
         // Extract userId from query (WebSocket Handshake) or Auth middleware
         // NOTE: This is likely the Firebase UID, not the internal UUID
         const passedId = req.query.userId || req.userId || 'anonymous';
+        console.log(`🔌 WS Authenticated as: ${passedId}`);
 
         let internalUserId = null;
 
@@ -140,6 +143,7 @@ async function processAudioStream(socket, chunks, userId) {
         try {
             const filename = `voice_ws_${userId}_${Date.now()}.wav`; // WAV format
             // 1. Upload
+            socket.send(JSON.stringify({ type: 'status', status: 'uploading' }));
             const uploadResult = await storageService.saveFile(wavBuffer, filename, 'audio/wav');
 
             // 2. Create Memory Record
@@ -169,6 +173,7 @@ async function processAudioStream(socket, chunks, userId) {
 
     // PATH A: Inference (Critical Path)
     try {
+        socket.send(JSON.stringify({ type: 'status', status: 'analyzing' }));
         const result = await audioEnhancementService.enhanceFromAudio(wavBuffer, 'audio/wav', duration);
 
         // --- BUSINESS LOGIC: CONFIRMATION ---
@@ -201,6 +206,36 @@ async function processAudioStream(socket, chunks, userId) {
             const confidence = result.confidence || 0;
             const category = result.detected_category;
 
+            // --- INTENT ROUTING: QUERY VS LOG ---
+            if (result.intent === 'query') {
+                console.log(`🤔 Detected Query Intent: "${result.transcription}"`);
+
+                // 1. Cleanup tentative memory (we don't save questions as memories)
+                const persistedMemory = await persistencePromise;
+                if (persistedMemory) {
+                    try {
+                        await db.query('DELETE FROM memory_units WHERE id = $1', [persistedMemory.id]);
+                        console.log(`🗑️ Deleted tentative memory ${persistedMemory.id} (Query processed)`);
+                    } catch (delErr) {
+                        console.error('Failed to delete query memory:', delErr);
+                    }
+                }
+
+                // 2. Execute Query
+                const queryResponse = await queryEngineService.query(userId, result.transcription);
+
+                // 3. Send Answer Payload
+                socket.send(JSON.stringify({
+                    type: 'answer',
+                    question: result.transcription,
+                    answer: queryResponse.answer,
+                    data: queryResponse.data,
+                    intent: 'query'
+                }));
+
+                return;
+            }
+
             // "only show confirmation prompt if confidance is lessthan 60% and if it is derived as financial memory"
             if (category === 'finance' && confidence < 0.6) {
                 needsConfirmation = true;
@@ -216,11 +251,13 @@ async function processAudioStream(socket, chunks, userId) {
 
             if (persistedMemory) {
                 try {
+                    socket.send(JSON.stringify({ type: 'status', status: 'saving' }));
                     const updateResult = await MemoryModel.updateEnhancement(persistedMemory.id, userId, {
                         rawInput: result.transcription || result.enhanced_text || '[Audio Processing Failed]',
                         normalizedData: {
                             ...persistedMemory.normalizedData,
                             enhanced_text: result.enhanced_text,
+                            ...result.detected_entities, // IMPORTANT: Persist extracted entities (amount, etc.)
                             confidence: confidence,
                             needs_confirmation: needsConfirmation
                             // Do not override audio_path etc
@@ -270,8 +307,12 @@ async function processAudioStream(socket, chunks, userId) {
         socket.send(JSON.stringify(responsePayload));
 
     } catch (e) {
-        console.error('❌ Path A Failed:', e);
-        socket.send(JSON.stringify({ type: 'error', message: 'Processing failed' }));
+        console.error('❌ WS Processing Failed:', e);
+        socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Processing failed',
+            details: e.message
+        }));
     }
 
     // Ensure persistence finishes eventually (optional, usually node keeps running)

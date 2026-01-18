@@ -383,6 +383,7 @@ class InputController {
                 console.warn('Failed to publish memory.created:', qErr);
             }
 
+            let habitConfirmation = '';
             reply.code(201).send({
                 success: true,
                 data: {
