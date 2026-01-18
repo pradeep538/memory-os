@@ -21,10 +21,10 @@ class AnalyticsService {
             return response.data;
         } catch (error) {
             console.error(`Analytics Service Error (getPatterns): ${error.message}`);
-            // Return null or empty object instead of throwing? 
-            // Better to throw if critical, but for insights, maybe partial?
-            // Throwing allows worker to retry.
-            throw error;
+            // Resilient Fallback: Return empty patterns instead of crashing worker
+            return {
+                patterns: []
+            };
         }
     }
 
@@ -39,7 +39,8 @@ class AnalyticsService {
             return response.data;
         } catch (error) {
             console.error(`Analytics Service Error (getConsistency): ${error.message}`);
-            throw error;
+            // Resilient Fallback: Return null to degrade gracefully
+            return null;
         }
     }
 }

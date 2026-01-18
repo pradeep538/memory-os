@@ -249,6 +249,17 @@ const gracefulShutdown = async (signal) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
+// Global Safety Net (Prevent Crashes)
+process.on('uncaughtException', (err) => {
+    console.error('🚨 UNCAUGHT EXCEPTION:', err);
+    // Keep running - do not exit
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('🚨 UNHANDLED REJECTION:', reason);
+    // Keep running
+});
+
 if (process.env.NODE_ENV !== 'test') {
     start();
 }
