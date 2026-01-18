@@ -40,6 +40,20 @@ await fastify.register(multipart, {
     }
 });
 
+// Rate limiting (Safety Net)
+await fastify.register((await import('@fastify/rate-limit')).default, {
+    max: 300, // Global limit (DoS protection)
+    timeWindow: '1 minute',
+    errorResponseBuilder: (request, context) => {
+        return {
+            success: false,
+            error: 'Too Many Requests',
+            message: `You are sending too many requests. Please try again in ${context.after} seconds.`,
+            statusCode: 429
+        };
+    }
+});
+
 // Swagger documentation
 await fastify.register(swagger, {
     swagger: {

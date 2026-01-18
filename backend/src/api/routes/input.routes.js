@@ -6,7 +6,14 @@ import inputController from '../controllers/input.controller.js';
  */
 async function inputRoutes(fastify, options) {
     // Process text input
+    // Process text input
     fastify.post('/text', {
+        config: {
+            rateLimit: {
+                max: 30, // Strict limit for LLM endpoints
+                timeWindow: '1 hour'
+            }
+        },
         schema: {
             description: 'Process natural language text input',
             tags: ['input'],
@@ -104,7 +111,14 @@ async function inputRoutes(fastify, options) {
     }, inputController.confirmEnhancement.bind(inputController));
 
     // Process audio input with Gemini native audio support (NEW)
+    // Process audio input with Gemini native audio support (NEW)
     fastify.post('/audio', {
+        config: {
+            rateLimit: {
+                max: 10,
+                timeWindow: '1 hour'
+            }
+        },
         schema: {
             description: 'Process audio input using Gemini native audio processing',
             tags: ['input', 'audio'],
