@@ -122,9 +122,19 @@ Respond ONLY with valid JSON.
 `;
 
             const response = await llmService.generateStructuredResponse(prompt);
-            const parsed = JSON.parse(response.replace(/```json|```/g, '').trim());
+            console.log(`🤖 LLM Habit Creation Response (Raw): "${response}"`);
+
+            // Robust JSON extraction
+            let jsonText = response;
+            if (jsonText.includes('{')) {
+                jsonText = jsonText.substring(jsonText.indexOf('{'), jsonText.lastIndexOf('}') + 1);
+            }
+
+            const parsed = JSON.parse(jsonText.trim());
+            console.log(`🔍 Parsed Habit Intent:`, parsed);
 
             if (parsed.detected && parsed.habit_name) {
+                console.log(`✅ Habit Creation Detected: ${parsed.habit_name}`);
                 return {
                     habitName: parsed.habit_name,
                     habitType: parsed.habit_type || 'build',
@@ -247,7 +257,7 @@ Respond ONLY with valid JSON.
                 COUNT(*) as count
             FROM memory_units
             WHERE user_id = $1
-              AND created_at >= NOW() - INTERVAL '60 days'
+              AND created_at >= NOW() - INTERVAL '7 days'
               AND status = 'validated'
               AND normalized_data->>'activity' IS NOT NULL
             GROUP BY category, normalized_data->>'activity'
@@ -262,8 +272,8 @@ Respond ONLY with valid JSON.
 
             // Categorize patterns
             const categorizedPatterns = {
-                recurring: patterns.filter(p => parseInt(p.count) >= 5),
-                occasional: patterns.filter(p => parseInt(p.count) >= 3 && parseInt(p.count) < 5),
+                recurring: patterns.filter(p => parseInt(p.count) >= 3),
+                occasional: patterns.filter(p => parseInt(p.count) >= 2 && parseInt(p.count) < 3),
                 categories: this.getCategoryDistribution(patterns),
                 allPatterns: patterns
             };
@@ -306,7 +316,7 @@ Respond ONLY with valid JSON.
         const prompt = `
 You are a personal habit coach. Analyze the user's behavior patterns and suggest 3 personalized habits they should build or quit.
 
-User's Activity Patterns (last 60 days):
+User's Activity Patterns (last 7 days):
 ${JSON.stringify(context.recurringActivities, null, 2)}
 
 Category Distribution:

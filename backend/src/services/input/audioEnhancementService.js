@@ -246,9 +246,15 @@ Respond ONLY with valid JSON in this exact format:
   },
   "semantic_confidence": 0.0 to 1.0,
   "audio_quality": "excellent|good|fair|poor",
-  "confirmation_message": "Short, crisp first-person confirmation (e.g. 'Logged your run', 'Saved $45 expense')",
-  "reasoning": "brief explanation"
+  "confirmation_message": "Short, crisp first-person confirmation",
+  "reasoning": "brief explanation",
+  "is_speech": boolean
 }
+
+CRITICAL RULES:
+1. If the audio is completely silent, contains only static/noise, or has no discernable speech, set "is_speech" to false, "transcription" to null, and "detected_category" to "none". 
+2. DO NOT hallucinate activities like "meditation" or "sleeping" if you don't hear them explicitly described. 
+3. "none" is a valid category for silence.
 
 Examples:
 
@@ -311,7 +317,8 @@ Now process the audio and respond ONLY with JSON.`;
                 semantic_confidence: parsed.semantic_confidence || 0.5,
                 audio_quality: parsed.audio_quality || 'unknown',
                 confirmation_message: parsed.confirmation_message || parsed.enhanced_text || 'Logged',
-                reasoning: parsed.reasoning || ''
+                reasoning: parsed.reasoning || '',
+                is_speech: parsed.is_speech !== false // Default to true unless explicitly false
             };
         } catch (error) {
             console.error('Failed to parse audio response:', error);

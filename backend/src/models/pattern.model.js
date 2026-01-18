@@ -10,6 +10,7 @@ class PatternModel {
             category,
             patternType,
             description,
+            insight,
             supportingMemories,
             confidenceScore,
             isActionable
@@ -23,16 +24,18 @@ class PatternModel {
             const query = `
         UPDATE patterns
         SET description = $1,
-            supporting_memories = $2,
-            confidence_score = $3,
+            insight = $2,
+            supporting_memories = $3,
+            confidence_score = $4,
             last_validated_at = NOW(),
-            is_actionable = $4
-        WHERE id = $5
+            is_actionable = $5
+        WHERE id = $6
         RETURNING *
       `;
 
             const result = await db.query(query, [
                 description,
+                insight || '',
                 supportingMemories || [],
                 confidenceScore,
                 isActionable || false,
@@ -44,10 +47,10 @@ class PatternModel {
             // Create new pattern
             const query = `
         INSERT INTO patterns (
-          user_id, category, pattern_type, description,
+          user_id, category, pattern_type, description, insight,
           supporting_memories, confidence_score, is_actionable
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *
       `;
 
@@ -56,6 +59,7 @@ class PatternModel {
                 category,
                 patternType,
                 description,
+                insight || '',
                 supportingMemories || [],
                 confidenceScore,
                 isActionable || false

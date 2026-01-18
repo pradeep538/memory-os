@@ -105,8 +105,7 @@ class _ConfirmationOverlayState extends State<ConfirmationOverlay>
                 Positioned(
                   left: AppSpacing.md,
                   right: AppSpacing.md,
-                  bottom:
-                      AppSpacing.xl +
+                  bottom: AppSpacing.xl +
                       (MediaQuery.of(context).size.height *
                           _slideAnimation.value *
                           0.5),
@@ -384,80 +383,92 @@ class _SuccessToastState extends State<SuccessToast>
 
   @override
   Widget build(BuildContext context) {
-    return SlideTransition(
-      position: _slideAnimation,
-      child: Container(
-        margin: const EdgeInsets.all(AppSpacing.md),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.success,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.success.withOpacity(0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.check_circle_rounded,
-              color: AppColors.textOnPrimary,
-              size: 20,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Logged!',
-                    style: AppTypography.label.copyWith(
-                      color: AppColors.textOnPrimary,
-                    ),
-                  ),
-                  Text(
-                    widget.text,
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.textOnPrimary.withOpacity(0.9),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.elasticOut,
+      builder: (context, scale, child) {
+        return Transform.scale(
+          scale: 0.8 + (scale * 0.2),
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: Container(
+              margin: const EdgeInsets.all(AppSpacing.md),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.md, // Slightly more padding
+              ),
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.4),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_circle_rounded,
+                      color: AppColors.textOnPrimary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'LOGGED!',
+                          style: AppTypography.label.copyWith(
+                            color: AppColors.textOnPrimary,
+                            letterSpacing: 1.2,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          widget.text,
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textOnPrimary.withOpacity(0.95),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (widget.onUndo != null) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    TextButton(
+                      onPressed: widget.onUndo,
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.white.withOpacity(0.15),
+                        foregroundColor: AppColors.textOnPrimary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppSpacing.radiusSm),
+                        ),
+                      ),
+                      child: const Text('Undo'),
+                    ),
+                  ],
+                ],
+              ),
             ),
-            if (widget.onUndo != null)
-              TextButton(
-                onPressed: widget.onUndo,
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.textOnPrimary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                  ),
-                ),
-                child: const Text('Undo'),
-              ),
-            if (widget.onView != null)
-              TextButton(
-                onPressed: widget.onView,
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.textOnPrimary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                  ),
-                ),
-                child: const Text('View'),
-              ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

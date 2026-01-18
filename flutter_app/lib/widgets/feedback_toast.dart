@@ -77,8 +77,10 @@ class FeedbackToast extends StatelessWidget {
         Icons.local_fire_department,
         color: Colors.orangeAccent,
       );
-    } else if (feedback.context == 'recovery') {
-      return const Icon(Icons.refresh, color: Colors.blueAccent);
+    } else if (feedback.context == 'milestone') {
+      return const Icon(Icons.stars_rounded, color: Colors.blueAccent);
+    } else if (feedback.context == 'habit_created') {
+      return const Icon(Icons.auto_awesome, color: Colors.amberAccent);
     }
     return const Icon(Icons.check_circle, color: Colors.greenAccent);
   }

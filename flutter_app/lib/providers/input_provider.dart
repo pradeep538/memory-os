@@ -79,6 +79,13 @@ class InputProvider extends ChangeNotifier {
   int _retryCount = 0;
   static const int _maxRetries = 1;
 
+  // Local audio buffer for offline fallback
+  final List<int> _audioBuffer = [];
+
+  // Silence detection
+  double _maxSeenAmplitude = -160.0;
+  static const double _silenceThreshold = -55.0; // dBFS
+
   @override
   void dispose() {
     _audioRecorder.dispose();
@@ -135,16 +142,18 @@ class InputProvider extends ChangeNotifier {
         detectedCategory: resultData['category'] ?? 'generic',
         detectedEntities: {}, // TODO: parse if sent
         confidenceScore: (resultData['confidence'] ?? 0.0).toDouble(),
-        shortResponse: resultData['confirmation_message'],
+        shortResponse:
+            resultData['confirmation'] ?? resultData['confirmation_message'],
+        isQuery: resultData['is_query'] ?? false,
+        answer: resultData['answer'],
       );
 
       if (result.needsConfirmation) {
         _updateState(InputState.confirming);
         _pendingResult = result;
       } else {
-        _lastMemory =
-            null; // We don't have full memory object yet from WS, or we construct minimal?
-        _lastFeedbackMessage = result.shortResponse ?? "Saved";
+        _lastMemory = null;
+        _lastFeedbackMessage = result.answer ?? result.shortResponse ?? "Saved";
         _pendingResult = null;
         _handleSuccess();
         syncPendingInputs();
@@ -196,7 +205,9 @@ class InputProvider extends ChangeNotifier {
           ),
         );
 
+        _audioBuffer.clear();
         stream.listen((data) {
+          _audioBuffer.addAll(data);
           _webSocketService!.streamAudioChunk(data);
         });
       } else {
@@ -218,6 +229,7 @@ class InputProvider extends ChangeNotifier {
       _activeSource = InputSource.voice;
       _updateState(InputState.recording);
       _recordingDuration = 0;
+      _maxSeenAmplitude = -160.0; // Reset
       _error = null;
       notifyListeners();
 
@@ -240,8 +252,22 @@ class InputProvider extends ChangeNotifier {
           await _audioRecorder.stop(); // Stops stream or file recording
 
       if (_webSocketService != null) {
+        // CLIENT-SIDE SILENCE DETECTION
+        if (_maxSeenAmplitude < _silenceThreshold) {
+          debugPrint(
+              '🔇 No speech detected (Max Amplitude: $_maxSeenAmplitude). Aborting.');
+          await cancelRecording();
+          return null;
+        }
+
         // Realtime mode: Signal end
         _webSocketService!.endAudioStream();
+
+        // RESILIENCY: If we lose connection or processing takes too long,
+        // we have the full buffer in _audioBuffer.
+        // We'll give WS a few seconds, otherwise we fallback to offline storage.
+        _startResiliencyTimer();
+
         _updateState(InputState.processing); // UI shows processing
         notifyListeners();
         // We expect WS message to transition to success
@@ -287,6 +313,9 @@ class InputProvider extends ChangeNotifier {
       if (_state == InputState.recording) {
         final amplitude = await _audioRecorder.getAmplitude();
         _amplitudeController.add(amplitude.current);
+        if (amplitude.current > _maxSeenAmplitude) {
+          _maxSeenAmplitude = amplitude.current;
+        }
       }
     });
   }
@@ -298,7 +327,72 @@ class InputProvider extends ChangeNotifier {
 
   // --- State Management Helpers ---
 
+  Timer? _resiliencyTimer;
+
+  void _startResiliencyTimer() {
+    _resiliencyTimer?.cancel();
+    _resiliencyTimer = Timer(const Duration(seconds: 8), () async {
+      if (_state == InputState.processing) {
+        debugPrint('⏳ WS Processing timeout. Falling back to offline storage.');
+        await _fallbackToOfflineAudio();
+      }
+    });
+  }
+
+  Future<void> _fallbackToOfflineAudio() async {
+    if (_audioBuffer.isEmpty) return;
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final path =
+          '${tempDir.path}/offline_voice_${DateTime.now().millisecondsSinceEpoch}.wav';
+      final file = File(path);
+
+      // Add WAV header (since we record in pcm16bits 16000Hz mono)
+      final wavData = _addWavHeader(Uint8List.fromList(_audioBuffer), 16000);
+      await file.writeAsBytes(wavData);
+
+      await _saveToOffline(path, OfflineInputType.audio);
+      _audioBuffer.clear();
+    } catch (e) {
+      debugPrint('Fallback to offline failed: $e');
+      _handleError('Failed to save recording locally');
+    }
+  }
+
+  Uint8List _addWavHeader(Uint8List pcmData, int sampleRate) {
+    final int fileSize = pcmData.length + 36;
+    final int byteRate = sampleRate * 2; // 16-bit mono
+
+    final header = ByteData(44);
+    // RIFF header
+    header.setUint32(0, 0x52494646, Endian.big); // "RIFF"
+    header.setUint32(4, fileSize, Endian.little);
+    header.setUint32(8, 0x57415645, Endian.big); // "WAVE"
+    // fmt chunk
+    header.setUint32(12, 0x666d7420, Endian.big); // "fmt "
+    header.setUint32(16, 16, Endian.little); // chunk size
+    header.setUint16(20, 1, Endian.little); // PCM
+    header.setUint16(22, 1, Endian.little); // mono
+    header.setUint32(24, sampleRate, Endian.little);
+    header.setUint32(28, byteRate, Endian.little);
+    header.setUint16(32, 2, Endian.little); // block align
+    header.setUint16(34, 16, Endian.little); // bits per sample
+    // data chunk
+    header.setUint32(36, 0x64617461, Endian.big); // "data"
+    header.setUint32(40, pcmData.length, Endian.little);
+
+    final result = Uint8List(44 + pcmData.length);
+    result.setAll(0, header.buffer.asUint8List());
+    result.setAll(44, pcmData);
+    return result;
+  }
+
   void _updateState(InputState newState) {
+    if (newState == InputState.success || newState == InputState.error) {
+      _resiliencyTimer?.cancel();
+      _audioBuffer.clear();
+    }
     debugPrint('InputProvider State: $_state -> $newState');
     _state = newState;
   }
@@ -452,7 +546,8 @@ class InputProvider extends ChangeNotifier {
         return true;
       } else {
         _lastMemory = result.memory;
-        _lastFeedbackMessage = result.shortResponse ?? result.enhancedText;
+        _lastFeedbackMessage =
+            result.answer ?? result.shortResponse ?? result.enhancedText;
         _pendingResult = null;
         _handleSuccess();
 

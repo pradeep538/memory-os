@@ -9,8 +9,17 @@ class InsightsController {
         try {
             const { refresh } = request.query;
 
-            
+
             const userId = request.userId;
+            console.log(`🔍 [InsightsController] Fetching for userId: ${userId}`);
+
+            // Check if user exists in DB
+            try {
+                const userCheck = await (await import('../../db/index.js')).query("SELECT id FROM users WHERE id = $1", [userId]);
+                console.log(`👤 [InsightsController] User found in DB: ${userCheck.rows.length > 0}`);
+            } catch (err) {
+                console.error(`❌ [InsightsController] DB Check error:`, err.message);
+            }
 
             const insights = refresh === 'true'
                 ? await insightsService.refreshInsights(userId)
@@ -39,7 +48,7 @@ class InsightsController {
         try {
             const { category } = request.params;
 
-            
+
             const userId = request.userId;
 
             const insights = await insightsService.getCategoryInsights(userId, category);
@@ -65,7 +74,7 @@ class InsightsController {
      */
     async refreshInsights(request, reply) {
         try {
-            
+
             const userId = request.userId;
 
             const insights = await insightsService.refreshInsights(userId);
@@ -91,7 +100,7 @@ class InsightsController {
      */
     async getPatterns(request, reply) {
         try {
-            
+
             const userId = request.userId;
 
             const patterns = await insightsService.getPatterns(userId);

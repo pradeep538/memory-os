@@ -7,6 +7,7 @@
         "start": "node src/index.js",
         "worker": "node src/worker.js",
         "ws": "node src/ws/server.js",
+        "audit": "node scripts/audit_features.js",
         "test:ws": "node scripts/test_websocket.js",
         "test:production": "node scripts/verify_production_ready.js",
         "migrate:plans": "node scripts/add_adaptive_scaling_fields.js",

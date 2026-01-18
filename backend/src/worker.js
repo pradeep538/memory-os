@@ -31,8 +31,9 @@ export async function startWorker() {
 
         // Register all workers
         for (const w of workers) {
+            console.log(`👷 Initializing worker: ${w.QUEUE_NAME || 'UNKNOWN'}`);
             if (!w.QUEUE_NAME || !w.default) {
-                console.warn(`⚠️ Invalid worker module: skipping. Export QUEUE_NAME and default function.`);
+                console.warn(`⚠️ Invalid worker module: skipping. Export QUEUE_NAME and default function. (Has default: ${!!w.default}, QUEUE_NAME: ${w.QUEUE_NAME})`);
                 continue;
             }
 

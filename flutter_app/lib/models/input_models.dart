@@ -10,6 +10,8 @@ class InputResult {
   final List<String>? suggestions;
   final Memory? memory;
   final String? shortResponse;
+  final bool isQuery;
+  final String? answer;
 
   InputResult({
     required this.needsConfirmation,
@@ -22,6 +24,8 @@ class InputResult {
     this.suggestions,
     this.memory,
     this.shortResponse,
+    this.isQuery = false,
+    this.answer,
   });
 
   factory InputResult.fromJson(Map<String, dynamic> json) {
@@ -45,6 +49,8 @@ class InputResult {
       memory: json['memory'] != null ? Memory.fromJson(json['memory']) : null,
       shortResponse:
           json['confirmation_message'] ?? json['confirmationMessage'],
+      isQuery: json['is_query'] ?? false,
+      answer: json['answer'],
     );
   }
 
@@ -59,6 +65,8 @@ class InputResult {
     List<String>? suggestions,
     Memory? memory,
     String? shortResponse,
+    bool? isQuery,
+    String? answer,
   }) {
     return InputResult(
       needsConfirmation: needsConfirmation ?? this.needsConfirmation,
@@ -71,6 +79,8 @@ class InputResult {
       suggestions: suggestions ?? this.suggestions,
       memory: memory ?? this.memory,
       shortResponse: shortResponse ?? this.shortResponse,
+      isQuery: isQuery ?? this.isQuery,
+      answer: answer ?? this.answer,
     );
   }
 }
@@ -104,6 +114,8 @@ class AudioInputResult {
   final VoiceQuota? quota;
   final Memory? memory;
   final String? shortResponse;
+  final bool isQuery;
+  final String? answer;
 
   AudioInputResult({
     required this.transcription,
@@ -116,6 +128,8 @@ class AudioInputResult {
     this.quota,
     this.memory,
     this.shortResponse,
+    this.isQuery = false,
+    this.answer,
   });
 
   factory AudioInputResult.fromJson(Map<String, dynamic> json) {
@@ -137,6 +151,8 @@ class AudioInputResult {
       memory: json['memory'] != null ? Memory.fromJson(json['memory']) : null,
       shortResponse:
           json['confirmation_message'] ?? json['confirmationMessage'],
+      isQuery: json['is_query'] ?? false,
+      answer: json['answer'],
     );
   }
 }

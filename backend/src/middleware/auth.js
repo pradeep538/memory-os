@@ -1,7 +1,7 @@
 import admin from 'firebase-admin';
 import config from '../config/index.js';
 import UserModel from '../models/user.model.js';
-
+import db from '../db/index.js'; // Added db import
 import fs from 'fs';
 
 // Initialize Firebase Admin SDK
@@ -74,8 +74,38 @@ export async function authenticate(request, reply) {
     // No auth header - reject in production, allow demo in dev
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         if (config.isDev) {
-            request.userId = DEMO_USER_ID;
-            request.log.debug('Using demo user (no auth header in dev mode)');
+            // Allow override via header for testing multiple scenarios
+            const demoOverride = request.headers['x-demo-user-id'];
+
+            if (demoOverride) {
+                // Ensure this demo user exists in the DB to satisfy FK constraints
+                try {
+                    const userCheck = await db.query('SELECT id FROM users WHERE id = $1', [demoOverride]);
+                    if (userCheck.rows.length === 0) {
+                        request.log.info(`Creating temp demo user: ${demoOverride}`);
+                        // Insert with specific UUID
+                        await db.query(
+                            `INSERT INTO users (id, username, email, subscription_tier, firebase_uid, active_categories)
+                             VALUES ($1, $2, $3, 'free', $4, $5)`,
+                            [
+                                demoOverride,
+                                `demo_${demoOverride.substring(0, 8)}`,
+                                `demo_${demoOverride.substring(0, 8)}@test.com`,
+                                `firebase_${demoOverride}`,
+                                '{}'
+                            ]
+                        );
+                    }
+                    request.userId = demoOverride;
+                } catch (err) {
+                    request.log.error(`Failed to create demo user: ${err.message}`);
+                    request.userId = DEMO_USER_ID;
+                }
+            } else {
+                request.userId = DEMO_USER_ID;
+            }
+
+            request.log.debug(`Using demo user (no auth header in dev mode): ${request.userId}`);
             return;
         }
         return reply.code(401).send({
@@ -169,7 +199,8 @@ export async function optionalAuth(request, reply) {
 
     // No auth header - use demo user
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        request.userId = DEMO_USER_ID;
+        const demoOverride = request.headers['x-demo-user-id'];
+        request.userId = demoOverride || DEMO_USER_ID;
         return;
     }
 

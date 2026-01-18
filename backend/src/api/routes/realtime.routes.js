@@ -175,6 +175,29 @@ async function processAudioStream(socket, chunks, userId) {
         let needsConfirmation = false;
 
         if (result.success) {
+            // Handle silence or no speech detected
+            if (result.is_speech === false || result.detected_category === 'none') {
+                console.warn('🔇 WebSocket: No speech detected by Gemini.');
+
+                // Cleanup: Delete the tentative memory if it exists
+                const persistedMemory = await persistencePromise;
+                if (persistedMemory) {
+                    try {
+                        await db.query('DELETE FROM memories WHERE id = $1', [persistedMemory.id]);
+                        console.log(`🗑️ Deleted tentative memory ${persistedMemory.id} (No speech detected)`);
+                    } catch (delErr) {
+                        console.error('Failed to delete silent memory:', delErr);
+                    }
+                }
+
+                socket.send(JSON.stringify({
+                    type: 'error',
+                    message: 'No speech detected. Please speak clearly.',
+                    code: 'NO_SPEECH'
+                }));
+                return;
+            }
+
             const confidence = result.confidence || 0;
             const category = result.detected_category;
 

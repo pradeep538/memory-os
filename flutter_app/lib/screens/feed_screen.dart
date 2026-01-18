@@ -145,6 +145,9 @@ class _FeedScreenState extends State<FeedScreen> {
             // Success toast
             Consumer<InputProvider>(
               builder: (context, inputProvider, _) {
+                // Prioritize specific engagement feedback over generic success toast
+                if (_latestFeedback != null) return const SizedBox.shrink();
+
                 if (inputProvider.state == InputState.success &&
                     inputProvider.lastMemory != null) {
                   return Positioned(

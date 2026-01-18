@@ -13,8 +13,11 @@ export async function runAutoMigrations() {
             ADD COLUMN IF NOT EXISTS phases JSONB DEFAULT '[]'::jsonb;
         `);
 
-        // Ensure schedules in existing plans are migrated if phases is empty (Optional for now)
-        // We just needed the column to exist to prevent errors.
+        // Migration 016: Add 'insight' column to patterns table
+        await db.query(`
+            ALTER TABLE patterns 
+            ADD COLUMN IF NOT EXISTS insight TEXT;
+        `);
 
         console.log('✅ Auto-migrations completed: Schema is up to date.');
     } catch (error) {

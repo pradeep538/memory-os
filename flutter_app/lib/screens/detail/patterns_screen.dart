@@ -141,15 +141,21 @@ class _PatternsScreenState extends State<PatternsScreen>
     }
 
     // Group insights by type
-    final recommendations = _insights.where((i) => i.type == 'recommendation').toList();
-    final warnings = _insights.where((i) => i.type == 'warning' || i.type == 'gap').toList();
-    final achievements = _insights.where((i) => i.type == 'achievement' || i.type == 'milestone').toList();
-    final other = _insights.where((i) =>
-        i.type != 'recommendation' &&
-        i.type != 'warning' &&
-        i.type != 'gap' &&
-        i.type != 'achievement' &&
-        i.type != 'milestone').toList();
+    final recommendations =
+        _insights.where((i) => i.type == 'recommendation').toList();
+    final warnings =
+        _insights.where((i) => i.type == 'warning' || i.type == 'gap').toList();
+    final achievements = _insights
+        .where((i) => i.type == 'achievement' || i.type == 'milestone')
+        .toList();
+    final other = _insights
+        .where((i) =>
+            i.type != 'recommendation' &&
+            i.type != 'warning' &&
+            i.type != 'gap' &&
+            i.type != 'achievement' &&
+            i.type != 'milestone')
+        .toList();
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -348,7 +354,7 @@ class _PatternCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      pattern.title,
+                      _humanizePatternType(pattern.patternType),
                       style: AppTypography.body.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -365,14 +371,14 @@ class _PatternCard extends StatelessWidget {
             ],
           ),
           ...[
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            pattern.description!,
-            style: AppTypography.body.copyWith(
-              color: AppColors.textSecondary,
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              pattern.description!,
+              style: AppTypography.body.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
-          ),
-        ],
+          ],
           if (pattern.trend != null) ...[
             const SizedBox(height: AppSpacing.md),
             _TrendIndicator(trend: pattern.trend!),
@@ -410,6 +416,17 @@ class _PatternCard extends StatelessWidget {
       default:
         return Icons.auto_awesome_rounded;
     }
+  }
+
+  String _humanizePatternType(String type) {
+    return type
+            .replaceAll('_', ' ')
+            .split(' ')
+            .map((word) => word.isNotEmpty
+                ? '${word[0].toUpperCase()}${word.substring(1)}'
+                : '')
+            .join(' ') +
+        ' Pattern';
   }
 }
 
@@ -469,9 +486,25 @@ class _InsightCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  insight.description ?? insight.headline,
+                  insight.description ?? '',
                   style: AppTypography.body.copyWith(
                     color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundSecondary,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    "DATA POV: ${insight.headline}",
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.textTertiary,
+                      fontSize: 10,
+                    ),
                   ),
                 ),
                 if (insight.actionable != null && insight.actionable!) ...[
@@ -605,8 +638,10 @@ class _TrendIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isPositive = trend.contains('+') || trend.toLowerCase().contains('up');
-    final isNegative = trend.contains('-') || trend.toLowerCase().contains('down');
+    final isPositive =
+        trend.contains('+') || trend.toLowerCase().contains('up');
+    final isNegative =
+        trend.contains('-') || trend.toLowerCase().contains('down');
 
     final color = isPositive
         ? AppColors.success

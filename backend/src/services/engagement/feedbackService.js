@@ -52,8 +52,30 @@ class FeedbackService {
             try {
                 const matchedHabit = await habitService.checkCompletionIntent(userId, text);
                 if (matchedHabit) {
+                    console.log(`✅ Habit Completion Detected: "${matchedHabit.habit_name}"`);
                     await habitService.logCompletion(matchedHabit.id, userId, true, text);
                     console.log(`✓ FeedbackService: Auto-competed habit "${matchedHabit.habit_name}"`);
+
+                    await this.createFeedback(userId, {
+                        message: `✅ Checked off: "${matchedHabit.habit_name}"`,
+                        context: 'habit_completed'
+                    });
+                    return; // Done
+                } else {
+                    // NEW: CHECK HABIT CREATION (if no completion matched)
+                    const newHabitData = await habitService.checkCreationIntent(userId, text);
+                    if (newHabitData) {
+                        console.log(`➕ Habit Creation Detected: "${newHabitData.habit_name}"`);
+                        const createdHabit = await habitService.createHabit(userId, newHabitData);
+                        console.log(`✓ FeedbackService: Auto-created habit "${createdHabit.habit_name}"`);
+
+                        // Override feedback message for creation
+                        await this.createFeedback(userId, {
+                            message: `✨ New Habit: "${createdHabit.habit_name}" added to your Kairo.`,
+                            context: 'habit_created'
+                        });
+                        return; // Skip standard message
+                    }
                 }
             } catch (hErr) {
                 console.error('FeedbackService Habit Check Failed:', hErr);
@@ -69,17 +91,26 @@ class FeedbackService {
             }
         }
 
-        // 2. Check Streak (Existing Logic)
-        const streakSql = `
-            SELECT current_logging_streak FROM user_engagement WHERE user_id = $1
+        // 2. Check Streak & Milestones
+        const statsSql = `
+            SELECT current_logging_streak, 
+            (SELECT COUNT(*) FROM memory_units WHERE user_id = $1) as total_memories
+            FROM user_engagement WHERE user_id = $1
         `;
-        const streakRes = await query(streakSql, [userId]);
-        const streak = streakRes.rows[0]?.current_logging_streak || 0;
+        const statsRes = await query(statsSql, [userId]);
+        const streak = statsRes.rows[0]?.current_logging_streak || 0;
+        const totalMemories = parseInt(statsRes.rows[0]?.total_memories || 0);
 
         let message = null;
         let context = 'post_log';
 
-        if (streak > 0 && streak % 3 === 0) {
+        if (totalMemories === 1) {
+            message = "✨ Welcome to Kairo! Your journey starts now.";
+            context = 'milestone';
+        } else if (totalMemories === 3) {
+            message = "💡 Tip: Keep logging to unlock 'Patterns'. You're doing great!";
+            context = 'milestone';
+        } else if (streak > 0 && streak % 3 === 0) {
             message = `🔥 ${streak} day streak! You're on fire.`;
             context = 'streak';
         } else if (streak === 1) {

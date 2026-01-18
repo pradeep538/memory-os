@@ -3,10 +3,10 @@ import geminiService from '../ai/geminiService.js';
 const QUERY_TYPES = {
     CHECK_TODAY: ['check_today', 'checktoday', 'todaycheck', 'did_today', 'today', 'did_i'],
     CHECK_YESTERDAY: ['check_yesterday', 'yesterday', 'did_yesterday'],
-    LAST_OCCURRENCE: ['last_occurrence', 'lastoccurrence', 'last_time', 'when_last', 'whenlast', 'last'],
-    FREQUENCY: ['frequency', 'how_often', 'howoften', 'often', 'how_many_times'],
-    NEXT_DUE: ['next_due', 'nextdue', 'when_next', 'whennext', 'next_time'],
-    COUNT_TOTAL: ['count', 'total', 'how_many', 'howmany', 'total_times']
+    FIND_LAST: ['find_last', 'last_occurrence', 'lastoccurrence', 'last_time', 'when_last', 'whenlast', 'last', 'FIND_LAST'],
+    CALCULATE_FREQUENCY: ['calculate_frequency', 'frequency', 'how_often', 'howoften', 'often', 'how_many_times', 'CALCULATE_FREQUENCY'],
+    COUNT_TOTAL: ['count_total', 'count', 'total', 'how_many', 'howmany', 'total_times', 'COUNT_TOTAL'],
+    SUM_TOTAL: ['sum_total', 'sum', 'total_amount', 'how_much', 'total_cost', 'SUM_TOTAL']
 };
 
 export class QueryParser {
@@ -14,283 +14,325 @@ export class QueryParser {
      * Parse voice query using LLM with minimal extraction
      */
     async parse(text) {
-        const prompt = this.buildPrompt(text);
-        // TODO: Implement actual LLM call when geminiService is ready
-        const response = '{"query_type":"CHECK_TODAY","subject":"example","search_keywords":["example"],"answer_template":{"positive":"Yes","negative":"No"}}';
-        const extracted = this.parseResponse(response);
+        const prompt = `Translate this user question into a structured query for a life-tracking database.
+The database has a table "memory_units" with columns: id, user_id, raw_input, enhanced_text, category, event_type, normalized_data, and created_at.
 
-        // Normalize query type to handle typos
-        extracted.query_type = this.normalizeQueryType(extracted.query_type);
+QUERY TYPES:
+1. CHECK_TODAY: Did I do X today?
+2. CHECK_YESTERDAY: Did I do X yesterday?
+3. FIND_LAST: When was the last time I did X?
+4. CALCULATE_FREQUENCY: How often do I do X?
+5. COUNT_TOTAL: How many times have I done X in total?
+6. SUM_TOTAL: How much (money/distance/time) have I spent/done on X?
 
-        return extracted;
-    }
-
-    buildPrompt(text) {
-        return `
-Parse this query and provide a simple, direct answer template:
-
-Question: "${text}"
-
-Extract:
-1. query_type: Choose ONE from: CHECK_TODAY, CHECK_YESTERDAY, LAST_OCCURRENCE, FREQUENCY, NEXT_DUE, COUNT_TOTAL
-2. subject: What they're asking about (extract the noun/activity)
-3. search_keywords: Array of keyword variations for database search
-4. answer_template: A simple sentence template with placeholders like {time}, {date}, {count}
-
-EXAMPLES:
-
-Input: "Did I take vitamin C today?"
-Output:
+Return ONLY valid JSON in this format:
 {
-  "query_type": "CHECK_TODAY",
-  "subject": "vitamin C",
-  "search_keywords": ["vitamin C", "vitamin-C", "vitC", "vit C", "ascorbic"],
+  "query_type": "CHECK_TODAY" | "CHECK_YESTERDAY" | "FIND_LAST" | "CALCULATE_FREQUENCY" | "COUNT_TOTAL" | "SUM_TOTAL",
+  "subject": "the main activity (e.g., coffee, gym, medication)",
+  "search_keywords": ["keyword1", "keyword2"],
   "answer_template": {
-    "positive": "Yes, taken at {time}",
-    "negative": "Not yet today"
+    "positive": "Natural language template for found. Use {raw_input} to show exact record, {date}, {time}, {days_ago}, {count}, {total}, or {formatted_total} where appropriate.",
+    "negative": "Natural language template for not found"
   }
 }
 
-Input: "When did I last water the plants?"
-Output:
-{
-  "query_type": "LAST_OCCURRENCE",
-  "subject": "water plants",
-  "search_keywords": ["water plants", "watered", "watering", "plant care"],
-  "answer_template": {
-    "positive": "{days_ago} days ago on {date}",
-    "negative": "No record found"
-  }
-}
+User Question: "${text}"`;
 
-Input: "How often do I exercise?"
-Output:
-{
-  "query_type": "FREQUENCY",
-  "subject": "exercise",
-  "search_keywords": ["exercise", "workout", "gym", "training"],
-  "answer_template": {
-    "positive": "About {frequency} times per week",
-    "negative": "Not enough data"
-  }
-}
-
-Now parse: "${text}"
-Output JSON only:
-`;
-    }
-
-    parseResponse(response) {
         try {
-            // Extract JSON from response
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) {
-                throw new Error('No JSON found in LLM response');
+            const llmService = (await import('../understanding/llmService.js')).default;
+            const textResponse = await llmService.generateStructuredResponse(prompt);
+
+            // Extract JSON from response (handle markdown code blocks)
+            let jsonText = textResponse.trim();
+            if (jsonText.includes('```json')) {
+                jsonText = jsonText.split('```json')[1].split('```')[0].trim();
+            } else if (jsonText.includes('```')) {
+                jsonText = jsonText.split('```')[1].split('```')[0].trim();
             }
 
-            return JSON.parse(jsonMatch[0]);
-        } catch (error) {
-            console.error('Failed to parse LLM response:', error);
-            throw new Error('Invalid LLM response format');
-        }
-    }
+            const response = JSON.parse(jsonText);
 
-    /**
-     * Normalize query type to handle typos and variations
-     */
-    normalizeQueryType(rawType) {
-        const normalized = rawType.toLowerCase().replace(/[_\s-]/g, '');
+            // Normalize query type to handle typos
+            response.query_type = this.normalizeQueryType(response.query_type);
 
-        for (const [canonical, variants] of Object.entries(QUERY_TYPES)) {
-            for (const variant of variants) {
-                const variantNormalized = variant.toLowerCase().replace(/[_\s-]/g, '');
-                if (normalized.includes(variantNormalized) || variantNormalized.includes(normalized)) {
-                    return canonical;
-                }
-            }
-        }
-
-        // Fallback: return original if no match
-        return rawType.toUpperCase().replace(/[_\s-]/g, '_');
-    }
-
-    /**
-     * Execute query against database
-     */
-    async execute(userId, extracted, db) {
-        const { query_type, search_keywords } = extracted;
-
-        switch (query_type) {
-            case 'CHECK_TODAY':
-                return await this.checkToday(userId, search_keywords, db);
-
-            case 'CHECK_YESTERDAY':
-                return await this.checkYesterday(userId, search_keywords, db);
-
-            case 'LAST_OCCURRENCE':
-                return await this.findLastOccurrence(userId, search_keywords, db);
-
-            case 'FREQUENCY':
-                return await this.calculateFrequency(userId, search_keywords, db);
-
-            case 'NEXT_DUE':
-                return await this.predictNextDue(userId, search_keywords, db);
-
-            case 'COUNT_TOTAL':
-                return await this.countTotal(userId, search_keywords, db);
-
-            default:
-                throw new Error(`Unknown query type: ${query_type}`);
-        }
-    }
-
-    async checkToday(userId, keywords, db) {
-        const conditions = keywords.map(() => 'raw_input ILIKE ?').join(' OR ');
-        const params = [userId, ...keywords.map(k => `%${k}%`)];
-
-        const result = await db.query(`
-      SELECT raw_input, created_at
-      FROM memory_units
-      WHERE user_id = ?
-        AND (${conditions})
-        AND DATE(created_at) = DATE('now')
-      ORDER BY created_at DESC
-      LIMIT 1
-    `, params);
-
-        if (result.length > 0) {
+            return response;
+        } catch (err) {
+            console.error('QueryParser parsing failed:', err);
+            // Fallback to a safe default
             return {
-                found: true,
-                data: {
-                    time: this.formatTime(result[0].created_at),
-                    full_text: result[0].raw_input,
-                    timestamp: result[0].created_at
-                }
+                query_type: 'CHECK_TODAY',
+                subject: text,
+                search_keywords: [text],
+                answer_template: { positive: "Found: {raw_input}", negative: "No matching records found." }
             };
         }
-
-        return { found: false };
     }
 
-    async checkYesterday(userId, keywords, db) {
-        const conditions = keywords.map(() => 'raw_input ILIKE ?').join(' OR ');
+    /**
+     * Normalize query type to handle variations from LLM
+     */
+    normalizeQueryType(rawType) {
+        if (!rawType) return 'CHECK_TODAY';
+        const normalized = rawType.toUpperCase().replace(/[_\s-]/g, '_');
+
+        if (normalized === 'LAST_OCCURRENCE') return 'FIND_LAST';
+        if (normalized === 'FREQUENCY') return 'CALCULATE_FREQUENCY';
+
+        // Return original if it looks valid, otherwise default
+        return normalized;
+    }
+
+    /**
+     * Execute structured query against database
+     */
+    async execute(userId, extracted, db, excludeId = null) {
+        switch (extracted.query_type) {
+            case 'CHECK_TODAY':
+                return this.checkToday(userId, extracted, db, excludeId);
+            case 'CHECK_YESTERDAY':
+                return this.checkYesterday(userId, extracted, db, excludeId);
+            case 'FIND_LAST':
+                return this.findLastOccurrence(userId, extracted, db, excludeId);
+            case 'CALCULATE_FREQUENCY':
+                return this.calculateFrequency(userId, extracted, db, excludeId);
+            case 'COUNT_TOTAL':
+                return this.countTotal(userId, extracted, db, excludeId);
+            case 'SUM_TOTAL':
+                return this.sumTotal(userId, extracted, db, excludeId);
+            default:
+                return this.findLastOccurrence(userId, extracted, db, excludeId);
+        }
+    }
+
+    async checkToday(userId, extracted, db, excludeId) {
+        const keywords = extracted.search_keywords || [extracted.subject];
+        const conditions = keywords.map((_, i) => `raw_input ILIKE $${i + 2}`).join(' OR ');
         const params = [userId, ...keywords.map(k => `%${k}%`)];
 
-        const result = await db.query(`
-      SELECT raw_input, created_at
-      FROM memory_units
-      WHERE user_id = ?
-        AND (${conditions})
-        AND DATE(created_at) = DATE('now', '-1 day')
-      ORDER BY created_at DESC
-      LIMIT 1
-    `, params);
+        let query = `
+            SELECT * FROM memory_units 
+            WHERE user_id = $1 
+            AND created_at >= CURRENT_DATE 
+            AND (${conditions})
+        `;
+
+        if (excludeId) {
+            query += ` AND id != $${params.length + 1}`;
+            params.push(excludeId);
+        }
+
+        query += ` ORDER BY created_at DESC LIMIT 1`;
+
+        const result = await db(query, params);
 
         return {
-            found: result.length > 0,
-            data: result.length > 0 ? {
-                time: this.formatTime(result[0].created_at),
-                full_text: result[0].raw_input
-            } : null
+            found: result.rows.length > 0,
+            data: result.rows[0] ? {
+                ...result.rows[0],
+                time: this.formatTime(result.rows[0].created_at)
+            } : {}
         };
     }
 
-    async findLastOccurrence(userId, keywords, db) {
-        const conditions = keywords.map(() => 'raw_input ILIKE ?').join(' OR ');
+    async checkYesterday(userId, extracted, db, excludeId) {
+        const keywords = extracted.search_keywords || [extracted.subject];
+        const conditions = keywords.map((_, i) => `raw_input ILIKE $${i + 2}`).join(' OR ');
         const params = [userId, ...keywords.map(k => `%${k}%`)];
 
-        const result = await db.query(`
-      SELECT raw_input, created_at
-      FROM memory_units
-      WHERE user_id = ?
-        AND (${conditions})
-      ORDER BY created_at DESC
-      LIMIT 1
-    `, params);
+        let query = `
+            SELECT * FROM memory_units 
+            WHERE user_id = $1 
+            AND created_at >= CURRENT_DATE - INTERVAL '1 day' 
+            AND created_at < CURRENT_DATE
+            AND (${conditions})
+        `;
 
-        if (result.length > 0) {
-            const daysAgo = this.calculateDaysAgo(result[0].created_at);
-
-            return {
-                found: true,
-                data: {
-                    days_ago: daysAgo,
-                    date: this.formatDate(result[0].created_at),
-                    timestamp: result[0].created_at
-                }
-            };
+        if (excludeId) {
+            query += ` AND id != $${params.length + 1}`;
+            params.push(excludeId);
         }
 
-        return { found: false };
-    }
+        query += ` ORDER BY created_at DESC LIMIT 1`;
 
-    async calculateFrequency(userId, keywords, db) {
-        const conditions = keywords.map(() => 'raw_input ILIKE ?').join(' OR ');
-        const params = [userId, ...keywords.map(k => `%${k}%`)];
-
-        const result = await db.query(`
-      SELECT COUNT(*) as count
-      FROM memory_units
-      WHERE user_id = ?
-        AND (${conditions})
-        AND created_at >= datetime('now', '-30 days')
-    `, params);
-
-        if (result[0].count > 0) {
-            const perWeek = (result[0].count / 30) * 7;
-
-            return {
-                found: true,
-                data: {
-                    frequency: Math.round(perWeek * 10) / 10,
-                    count: result[0].count
-                }
-            };
-        }
-
-        return { found: false };
-    }
-
-    async predictNextDue(userId, keywords, db) {
-        // Get last occurrence and average frequency
-        const lastOccurrence = await this.findLastOccurrence(userId, keywords, db);
-        const frequency = await this.calculateFrequency(userId, keywords, db);
-
-        if (lastOccurrence.found && frequency.found) {
-            const avgDaysBetween = 7 / frequency.data.frequency;
-            const nextDueDate = new Date(lastOccurrence.data.timestamp);
-            nextDueDate.setDate(nextDueDate.getDate() + avgDaysBetween);
-
-            const daysUntil = this.calculateDaysAgo(nextDueDate);
-
-            return {
-                found: true,
-                data: {
-                    days_until: Math.abs(daysUntil),
-                    date: this.formatDate(nextDueDate),
-                    is_overdue: daysUntil < 0
-                }
-            };
-        }
-
-        return { found: false };
-    }
-
-    async countTotal(userId, keywords, db) {
-        const conditions = keywords.map(() => 'raw_input ILIKE ?').join(' OR ');
-        const params = [userId, ...keywords.map(k => `%${k}%`)];
-
-        const result = await db.query(`
-      SELECT COUNT(*) as count
-      FROM memory_units
-      WHERE user_id = ?
-        AND (${conditions})
-    `, params);
+        const result = await db(query, params);
 
         return {
-            found: result[0].count > 0,
+            found: result.rows.length > 0,
+            data: result.rows[0] ? {
+                ...result.rows[0],
+                time: this.formatTime(result.rows[0].created_at)
+            } : {}
+        };
+    }
+
+    async findLastOccurrence(userId, extracted, db, excludeId) {
+        const keywords = extracted.search_keywords || [extracted.subject];
+        const conditions = keywords.map((_, i) => `raw_input ILIKE $${i + 2}`).join(' OR ');
+        const params = [userId, ...keywords.map(k => `%${k}%`)];
+
+        let query = `
+            SELECT * FROM memory_units 
+            WHERE user_id = $1 
+            AND (${conditions})
+        `;
+
+        if (excludeId) {
+            query += ` AND id != $${params.length + 1}`;
+            params.push(excludeId);
+        }
+
+        query += ` ORDER BY created_at DESC LIMIT 1`;
+
+        const result = await db(query, params);
+
+        if (result.rows.length > 0) {
+            const row = result.rows[0];
+            return {
+                found: true,
+                data: {
+                    ...row,
+                    date: this.formatDate(row.created_at),
+                    time: this.formatTime(row.created_at),
+                    days_ago: this.calculateDaysAgo(row.created_at)
+                }
+            };
+        }
+
+        return { found: false };
+    }
+
+    async calculateFrequency(userId, extracted, db) {
+        const keywords = extracted.search_keywords || [extracted.subject];
+        const conditions = keywords.map((_, i) => `raw_input ILIKE $${i + 2}`).join(' OR ');
+        const params = [userId, ...keywords.map(k => `%${k}%`)];
+
+        const result = await db(`
+            SELECT COUNT(*) as count 
+            FROM memory_units 
+            WHERE user_id = $1 
+            AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+            AND (${conditions})
+        `, params);
+
+        if (result.rows.length > 0) {
+            const count = parseInt(result.rows[0].count);
+            const perWeek = (count / 30) * 7;
+
+            return {
+                found: count > 0,
+                data: {
+                    frequency: Math.round(perWeek * 10) / 10,
+                    count: count
+                }
+            };
+        }
+
+        return { found: false };
+    }
+
+    async countTotal(userId, extracted, db) {
+        const keywords = extracted.search_keywords || [extracted.subject];
+        const conditions = keywords.map((_, i) => `raw_input ILIKE $${i + 2}`).join(' OR ');
+        const params = [userId, ...keywords.map(k => `%${k}%`)];
+
+        const result = await db(`
+            SELECT COUNT(*) as count 
+            FROM memory_units 
+            WHERE user_id = $1 
+            AND (${conditions})
+        `, params);
+
+        const count = result.rows.length > 0 ? parseInt(result.rows[0].count) : 0;
+        return {
+            found: count > 0,
             data: {
-                count: result[0].count
+                count: count
+            }
+        };
+    }
+
+    async sumTotal(userId, extracted, db, excludeId) {
+        const keywords = extracted.search_keywords || [extracted.subject];
+        // Add explicit type cast to parameters for ILIKE
+        const conditions = keywords.map((_, i) => `raw_input ILIKE $${i + 2}::text`).join(' OR ');
+        const params = [userId, ...keywords.map(k => `%${k}%`)];
+
+        // Try to sum common numeric fields in the normalized_data JSONB column
+        // We look for 'amount', 'cost', 'price', 'value', 'distance', 'duration'
+        // This handles cases like {"amount": "$15"} by extracting numeric characters
+        let query = `
+            SELECT 
+                SUM(
+                    COALESCE(
+                        NULLIF(regexp_replace((normalized_data->>'amount')::text, '[^0-9.]', '', 'g'), '')::numeric,
+                        NULLIF(regexp_replace((normalized_data->>'cost')::text, '[^0-9.]', '', 'g'), '')::numeric,
+                        NULLIF(regexp_replace((normalized_data->>'price')::text, '[^0-9.]', '', 'g'), '')::numeric,
+                        NULLIF(regexp_replace((normalized_data->>'value')::text, '[^0-9.]', '', 'g'), '')::numeric,
+                        NULLIF(regexp_replace((normalized_data->>'distance')::text, '[^0-9.]', '', 'g'), '')::numeric,
+                        0
+                    )
+                ) as total
+            FROM memory_units 
+            WHERE user_id = $1::uuid 
+            AND (${conditions})
+        `;
+
+        if (excludeId) {
+            query += ` AND id != $${params.length + 1}::uuid`;
+            params.push(excludeId);
+        }
+
+        const result = await db(query, params);
+        const total = result.rows[0]?.total ? parseFloat(result.rows[0].total) : 0;
+
+        // Detect Unit from the latest record
+        let unitPrefix = '';
+        let unitSuffix = '';
+
+        if (total > 0) {
+            // Re-construct params for sample query to avoid index issues of reused array
+            const sampleParams = [userId, ...keywords.map(k => `%${k}%`)];
+
+            let sampleQuery = `
+                SELECT normalized_data FROM memory_units 
+                WHERE user_id = $1::uuid AND (${conditions})
+            `;
+
+            if (excludeId) {
+                sampleQuery += ` AND id != $${sampleParams.length + 1}::uuid`;
+                sampleParams.push(excludeId);
+            }
+
+            sampleQuery += ` ORDER BY created_at DESC LIMIT 1`;
+
+            const sampleResult = await db(sampleQuery, sampleParams);
+            if (sampleResult.rows.length > 0) {
+                const data = sampleResult.rows[0].normalized_data;
+                const keys = ['amount', 'cost', 'price', 'value', 'distance', 'duration'];
+                for (const key of keys) {
+                    if (data[key]) {
+                        const val = data[key].toString();
+                        // Check for prefix (e.g. $)
+                        const prefixMatch = val.match(/^[^0-9]+/);
+                        if (prefixMatch) unitPrefix = prefixMatch[0].trim();
+
+                        // Check for suffix (e.g. km, mins)
+                        const suffixMatch = val.match(/[^0-9]+$/);
+                        if (suffixMatch) unitSuffix = suffixMatch[0].trim();
+                        break;
+                    }
+                }
+            }
+        }
+
+        const formattedTotal = `${unitPrefix}${total}${unitSuffix ? ' ' + unitSuffix : ''}`.trim();
+
+        return {
+            found: total > 0,
+            data: {
+                total: total,
+                formatted_total: formattedTotal,
+                unit: unitPrefix || unitSuffix
             }
         };
     }
@@ -299,9 +341,10 @@ Output JSON only:
      * Fill answer template with actual data
      */
     fillTemplate(template, data, found) {
-        const answerTemplate = found ? template.positive : template.negative;
+        if (!template) return "No template provided";
+        const answerTemplate = found ? (template.positive || "Found") : (template.negative || "Not found");
 
-        // Replace placeholders
+        // Replace placeholders (e.g., {date}, {time}, {count}, {raw_input})
         let answer = answerTemplate.replace(/\{(\w+)\}/g, (match, key) => {
             return data?.[key] !== undefined ? data[key] : match;
         });

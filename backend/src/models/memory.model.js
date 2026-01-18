@@ -22,7 +22,7 @@ class MemoryModel {
             source || 'text',
             eventType,
             category,
-            normalizedData,
+            normalizedData || {},
             confidenceScore,
             status || 'tentative'
         ];
@@ -38,7 +38,7 @@ class MemoryModel {
                     memory.id,
                     userId,
                     category,
-                    normalizedData,
+                    normalizedData || {},
                     memory.created_at
                 );
                 console.log(`✅ Metrics extracted for memory ${memory.id}`);
@@ -115,6 +115,7 @@ class MemoryModel {
         if (filters.offset) {
             query += ` OFFSET $${paramIndex}`;
             values.push(filters.offset);
+            paramIndex++;
         }
 
         const result = await db.query(query, values);
@@ -152,7 +153,7 @@ class MemoryModel {
         const values = [
             rawInput,
             category,
-            normalizedData,
+            normalizedData || {},
             confidenceScore,
             status,
             id,

@@ -5,6 +5,7 @@ import '../../config/app_spacing.dart';
 import '../../models/input_models.dart';
 import '../common/base_card.dart';
 import '../common/category_chip.dart';
+import '../common/shimmer_loading.dart';
 
 /// Recent memories widget showing latest logged entries
 class RecentMemoriesWidget extends StatelessWidget {
@@ -106,8 +107,11 @@ class _MemoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Check if it's the specific placeholder we want to animate
+    final bool isProcessing = memory.rawInput == '[Realtime Audio]';
+
     return GestureDetector(
-      onTap: onTap,
+      onTap: isProcessing ? null : onTap, // Disable tap while processing
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -117,9 +121,11 @@ class _MemoryRow extends StatelessWidget {
             // Category indicator
             Container(
               width: 4,
-              height: 40,
+              height: 44, // Slightly taller
               decoration: BoxDecoration(
-                color: AppColors.getCategoryColor(memory.category),
+                color: isProcessing
+                    ? AppColors.primary.withOpacity(0.5)
+                    : AppColors.getCategoryColor(memory.category),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -130,26 +136,72 @@ class _MemoryRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    memory.displayText,
-                    style: AppTypography.body,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
+                  if (isProcessing) ...[
+                    // Shimmer lines instead of text
+                    const ShimmerLoading(width: 200, height: 14),
+                    const SizedBox(height: 6),
+                    const ShimmerLoading(width: 140, height: 14),
+                  ] else ...[
+                    Text(
+                      memory.displayText,
+                      style: AppTypography.body,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.sm),
                   Row(
                     children: [
-                      CategoryChip(
-                        category: memory.category,
-                        compact: true,
-                        showIcon: false,
-                      ),
+                      if (isProcessing) ...[
+                        // Custom processing chip
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: AppColors.primary.withOpacity(0.2),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(
+                                width: 10,
+                                height: 10,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      AppColors.primary),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'AI processing...',
+                                style: AppTypography.caption.copyWith(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        CategoryChip(
+                          category: memory.category,
+                          compact: true,
+                          showIcon: false,
+                        ),
+                      ],
                       const SizedBox(width: AppSpacing.sm),
                       Text(
                         _getTimeAgo(memory.createdAt),
                         style: AppTypography.caption,
                       ),
-                      if (memory.source == 'voice') ...[
+                      if (memory.source == 'voice' && !isProcessing) ...[
                         const SizedBox(width: AppSpacing.sm),
                         Icon(
                           Icons.mic_rounded,

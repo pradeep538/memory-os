@@ -8,6 +8,10 @@ import PlanModel from '../../models/plan.model.js';
 import queue from '../../lib/queue.js';
 import { validationService } from '../../services/validation/validationService.js';
 import { hybridExtractor } from '../../services/extraction/hybridExtractor.js';
+import { queryParser } from '../../services/query/queryParser.js';
+import { query as db } from '../../db/index.js';
+
+console.log('--- InputController DB Type:', typeof db);
 
 class InputController {
     /**
@@ -83,6 +87,7 @@ class InputController {
 
             // Step 2: Enhance with LLM - Pass userId for Plan Context
             const enhancement = await inputEnhancementService.enhance(text, 'text', userId);
+            console.log("DEBUG CONTROLLER: is_query =", enhancement.is_query, "intent =", enhancement.intent);
 
             if (!enhancement.success) {
                 // Determine if we should fail or just keep raw
@@ -101,9 +106,69 @@ class InputController {
                 });
             }
 
+            // Step 2.5: Handle QUERY Intent (Intelligent Answers)
+            if (enhancement.is_query) {
+                try {
+                    console.log(`🔍 Query Intent Detected: "${text}"`);
+
+                    // 1. Parse query for database search
+                    const extracted = await queryParser.parse(text);
+                    console.log('🔍 Extracted Query Keywords:', extracted.search_keywords);
+
+                    // 2. Execute DB search
+                    const queryResult = await queryParser.execute(userId, extracted, db, memory.id);
+                    console.log('🔍 Query Result Found:', queryResult.found);
+
+                    // 3. Synthesize natural language answer
+                    const answer = queryParser.fillTemplate(
+                        extracted.answer_template,
+                        queryResult.data,
+                        queryResult.found
+                    );
+                    console.log('🔍 Final Synthesized Answer:', answer);
+
+                    // Optional: Update the memory record to reflect it was a query
+                    await MemoryModel.updateEnhancement(memory.id, userId, {
+                        rawInput: enhancement.enhanced_text,
+                        category: 'generic',
+                        status: 'validated',
+                        normalizedData: {
+                            is_query: true,
+                            query_type: extracted.query_type,
+                            answer: answer
+                        }
+                    });
+
+                    return reply.code(200).send({
+                        success: true,
+                        data: {
+                            is_query: true,
+                            question: text,
+                            answer: answer,
+                            intent: extracted.query_type,
+                            confirmation: answer // Display as confirmation toast
+                        }
+                    });
+                } catch (queryErr) {
+                    console.error('Failed to process deep query:', queryErr);
+                    // Fallback to treat as a regular memory if query fails
+                }
+            }
+
             // Step 3: Check confidence threshold
             const CONFIDENCE_THRESHOLD = 0.8;
             const needsConfirmation = enhancement.confidence < CONFIDENCE_THRESHOLD;
+
+            // Step 3.1: Publish to Queue (Early for background analysis)
+            try {
+                await queue.send('memory.created', {
+                    userId,
+                    memoryId: memory.id,
+                    text: enhancement.enhanced_text
+                });
+            } catch (qErr) {
+                console.warn('Failed to publish memory.created:', qErr);
+            }
 
             if (needsConfirmation) {
                 // Update with what we have so far, but keep status 'processing' or 'tentative'?
@@ -200,29 +265,12 @@ class InputController {
                 status: 'validated'
             });
 
-            // Step 4.5: Check for matching habits (NEW)
-            let habitConfirmation = '';
-            try {
-                // A. Check for Completion of EXISTING habits
-                const matchedHabit = await habitService.checkCompletionIntent(userId, enhancement.enhanced_text);
-
-                if (matchedHabit) {
-                    await habitService.logCompletion(matchedHabit.id, userId, true, enhancement.enhanced_text);
-                    habitConfirmation = `\n✓ Checked off habit: "${matchedHabit.habit_name}"`;
-                } else {
-                    // B. Check for Creation of NEW habits (Fallback)
-                    const newHabitData = await habitService.checkCreationIntent(userId, enhancement.enhanced_text);
-                    if (newHabitData) {
-                        const createdHabit = await habitService.createHabit(userId, newHabitData);
-                        habitConfirmation = `\n✓ Created new habit: "${createdHabit.habit_name}" (${createdHabit.habit_type})`;
-                    }
-                }
-            } catch (hError) {
-                console.error('Habit check failed:', hError);
-            }
+            // Step 4.5: Habis are handled asynchronously by 'memory.created' worker
+            // to ensure accurate feedback sequencing.
 
             // Step 4.6: Update Action Plans (Deterministic Fallback)
             let planConfirmation = '';
+            let habitConfirmation = ''; // Initialize fallback
             try {
                 const planProgressService = (await import('../../services/plans/planProgress.js')).default;
 
@@ -255,18 +303,7 @@ class InputController {
             // Generate success message
             const confirmation = `✓ Logged! ${enhancement.enhanced_text}${habitConfirmation}${planConfirmation}`;
 
-            // Step 5: Engagement (Event-Driven) 🚀
-            // Publishing to 'memory.created' triggers immediate feedback & delayed analysis
-            try {
-                await queue.send('memory.created', {
-                    userId,
-                    memoryId: memory.id,
-                    text: enhancement.enhanced_text
-                });
-                console.log(`⚡ Event Published: memory.created for ${requestId || memory.id}`);
-            } catch (qErr) {
-                console.warn('Failed to publish memory.created:', qErr);
-            }
+            // Step 5: Engagement (Event-Driven) already triggered above 🚀
 
             reply.code(201).send({
                 success: true,
@@ -322,26 +359,7 @@ class InputController {
                 status: 'validated'
             });
 
-            // 5. Check for matching habits (NEW)
-            let habitConfirmation = '';
-            try {
-                // A. Check for Completion of EXISTING habits
-                const matchedHabit = await habitService.checkCompletionIntent(userId, enhanced_text);
-
-                if (matchedHabit) {
-                    await habitService.logCompletion(matchedHabit.id, userId, true, enhanced_text);
-                    habitConfirmation = `\n✓ Checked off habit: "${matchedHabit.habit_name}"`;
-                } else {
-                    // B. Check for Creation of NEW habits
-                    const newHabitData = await habitService.checkCreationIntent(userId, enhanced_text);
-                    if (newHabitData) {
-                        const createdHabit = await habitService.createHabit(userId, newHabitData);
-                        habitConfirmation = `\n✓ Created new habit: "${createdHabit.habit_name}" (${createdHabit.habit_type})`;
-                    }
-                }
-            } catch (hError) {
-                console.error('Habit check failed:', hError);
-            }
+            // 5. Habis are handled asynchronously by 'memory.created' worker
 
             // 6. Update Action Plans (Context-Aware)
             try {

@@ -509,18 +509,16 @@ BEGIN
     total_events = user_engagement.total_events + 1,
     days_since_last_log = 0,
     current_logging_streak = CASE
-      WHEN user_engagement.last_activity_date = CURRENT_DATE - INTERVAL '1 day'
-      THEN user_engagement.current_logging_streak + 1
-      WHEN user_engagement.last_activity_date = CURRENT_DATE
-      THEN user_engagement.current_logging_streak
+      WHEN user_engagement.last_activity_date = CURRENT_DATE - 1 THEN user_engagement.current_logging_streak + 1
+      WHEN user_engagement.last_activity_date = CURRENT_DATE THEN user_engagement.current_logging_streak
       ELSE 1
     END,
     longest_logging_streak = GREATEST(
       user_engagement.longest_logging_streak,
       CASE
-        WHEN user_engagement.last_activity_date = CURRENT_DATE - INTERVAL '1 day'
-        THEN user_engagement.current_logging_streak + 1
-        ELSE user_engagement.current_logging_streak
+        WHEN user_engagement.last_activity_date = CURRENT_DATE - 1 THEN user_engagement.current_logging_streak + 1
+        WHEN user_engagement.last_activity_date = CURRENT_DATE THEN user_engagement.current_logging_streak
+        ELSE 1
       END
     ),
     updated_at = NOW();

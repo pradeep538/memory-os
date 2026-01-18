@@ -166,26 +166,32 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
         return;
       }
 
-      // Async upload
-      final success = await provider.processAudio(file);
+      await provider.processAudio(file);
 
-      if (success && mounted) {
-        // Show different feedback if very short?
-        // For now consistent "Uploaded" is best.
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Uploaded! Processing in background.'),
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      // Removed redundant SnackBar as SuccessToast handles feedback now.
 
       try {
         await file.delete();
       } catch (_) {}
     } else {
       provider.cancelRecording();
+    }
+  }
+
+  void _checkAndStartPulse(InputState state) {
+    if (state == InputState.processing ||
+        state == InputState.enhancing ||
+        state == InputState.transcribing) {
+      if (!_pulseController.isAnimating) {
+        _pulseController.repeat(reverse: true);
+      }
+    } else if (state == InputState.recording) {
+      // Handled in _startRecording
+    } else {
+      if (!_isHolding && _pulseController.isAnimating) {
+        _pulseController.stop();
+        _pulseController.reset();
+      }
     }
   }
 
@@ -196,6 +202,9 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
         final state = inputProvider.state;
         final maxDuration = inputProvider.maxRecordingDuration;
         final progress = _elapsedSeconds / maxDuration;
+
+        // Auto-start pulse for background states
+        _checkAndStartPulse(state);
 
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -223,8 +232,11 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
                       ),
                     ),
 
-                  // Pulse Effect (Recording)
-                  if (state == InputState.recording)
+                  // Pulse Effect (Recording or Thinking)
+                  if (state == InputState.recording ||
+                      state == InputState.processing ||
+                      state == InputState.enhancing ||
+                      state == InputState.transcribing)
                     ScaleTransition(
                       scale: _pulseAnimation,
                       child: Container(
@@ -232,7 +244,10 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
                         height: 56,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: AppColors.primary.withOpacity(0.3),
+                          color: (state == InputState.recording
+                                  ? AppColors.primary
+                                  : AppColors.mindfulness)
+                              .withOpacity(0.3),
                         ),
                       ),
                     ),
@@ -266,14 +281,23 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
                               ? LinearGradient(
                                   colors: [AppColors.error, AppColors.error],
                                 )
-                              : state == InputState.success
-                                  ? LinearGradient(
+                              : (state == InputState.processing ||
+                                      state == InputState.enhancing ||
+                                      state == InputState.transcribing)
+                                  ? const LinearGradient(
                                       colors: [
-                                        AppColors.success,
-                                        AppColors.success
+                                        AppColors.mindfulness,
+                                        AppColors.mindfulnessLight
                                       ],
                                     )
-                                  : AppColors.primaryGradient,
+                                  : state == InputState.success
+                                      ? LinearGradient(
+                                          colors: [
+                                            AppColors.success,
+                                            AppColors.success
+                                          ],
+                                        )
+                                      : AppColors.primaryGradient,
                       shape: BoxShape.circle,
                       boxShadow: [
                         if (widget.isEnabled)
@@ -312,11 +336,17 @@ class _MicFabState extends State<MicFab> with SingleTickerProviderStateMixin {
     if (isVoiceActive &&
         (state == InputState.processing ||
             state == InputState.transcribing ||
-            state == InputState.enhancing ||
-            state == InputState.confirming)) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+            state == InputState.enhancing)) {
+      return TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(seconds: 2),
+        builder: (context, value, child) {
+          return const Icon(
+            Icons.auto_awesome_rounded,
+            color: Colors.white,
+            size: 28,
+          );
+        },
       );
     }
 

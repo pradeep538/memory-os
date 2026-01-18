@@ -52,7 +52,7 @@ Now generate for the given pattern. Return ONLY the insight text, nothing else.
 `;
 
         try {
-            const insight = await llmService.generateResponse('pattern_insight', { pattern });
+            const insight = await llmService.generateStructuredResponse(prompt);
             return insight || pattern.description; // Fallback to raw description
         } catch (error) {
             console.error('LLM insight generation failed:', error);
@@ -79,7 +79,8 @@ Now generate for the given pattern. Return ONLY the insight text, nothing else.
                     id: p.id,
                     type: p.pattern_type,
                     category: p.category,
-                    insight: p.description,
+                    insight: p.insight || p.description,
+                    description: p.description,
                     confidence: parseFloat(p.confidence_score),
                     isNew: false,
                     lastUpdated: p.last_validated_at
@@ -110,7 +111,8 @@ Now generate for the given pattern. Return ONLY the insight text, nothing else.
                 userId,
                 category: pattern.category,
                 patternType: pattern.pattern_type,
-                description: naturalLanguage,
+                description: pattern.description || '',
+                insight: naturalLanguage,
                 supportingMemories: [],
                 confidenceScore: pattern.confidence || 0.7,
                 isActionable: false
@@ -121,6 +123,7 @@ Now generate for the given pattern. Return ONLY the insight text, nothing else.
                 type: pattern.pattern_type,
                 category: pattern.category,
                 insight: naturalLanguage,
+                description: pattern.description,
                 confidence: pattern.confidence || 0.7,
                 rawData: pattern,
                 isNew: true,
@@ -191,6 +194,7 @@ Now generate for the given pattern. Return ONLY the insight text, nothing else.
             pattern_type: p.pattern_type,
             category: p.category,
             description: p.description,
+            insight: p.insight,
             confidence_score: parseFloat(p.confidence_score),
             frequency: null,
             trend: null,

@@ -58,6 +58,8 @@ class InputEnhancementService {
             // Fallback to raw text
             return {
                 success: true,
+                intent: 'LOGGING',
+                is_query: false,
                 enhanced_text: rawText,
                 raw_text: rawText,
                 confidence: 0.4, // Low confidence for fallback
@@ -85,43 +87,29 @@ class InputEnhancementService {
 Input: "${rawText}"
 
 CONTEXT: The user has these ACTIVE BLUEPRINTS (Action Plans):
-\${planContext}
+${planContext}
 
 Your task:
-1. Transform the input into a complete, natural sentence.
-2. Fill in implied context (articles, prepositions, etc.).
-3. Fix grammar and syntax.
-4. Extract key entities.
-5. **CRITICAL: BLUEPRINT MATCHING (Smart ID)**
-   - Check if this input advances any of the Active Blueprints listed above.
-   - MATCH SEMANTICS, NOT JUST KEYWORDS. 
-     - Example: "Hit the pavement" -> Matches "Running Blueprint" (Fitness).
-     - Example: "Took my pills" -> Matches "Meds Blueprint" (Category: Health).
-   - If a match is found, YOU MUST return the \`plan_id\` in \`plan_updates\`.
-   - If user input suggests a category different from the plan's label, TRUST THE PLAN MATCH first.
+1. **CRITICAL: Classify INTENT**
+   - "QUERY": User is asking for status, history, totals, or checking facts (e.g., "What did I...?", "When was...?", "Did I...?", "How much...?", "Total...?")
+   - "LOGGING": User is stating an action performed or a note to save (e.g., "I ate...", "Logged...", "Note that...")
+2. Transform into a complete natural sentence.
+3. Fill context & fix grammar.
+4. Match to Active Blueprints if applicable.
 
 Respond ONLY with valid JSON in this exact format:
 {
-  "enhanced_text": "Complete, grammatically correct sentence",
-  "detected_category": "fitness (e.g. gym, workout, running) | finance | routine | health | medication | mindfulness | generic",
-  "detected_entities": {
-    "duration_minutes": number or null,
-    "amount": number or null,
-    "activity_type": "string or null",
-    "location": "string or null"
-  },
-  "plan_updates": [
-    {
-      "plan_id": "UUID from context",
-      "is_fulfilled": boolean,
-      "progress_value": number, // default 1 if just "did it", or specific amount
-      "progress_unit": "string"
-    }
-  ],
-  "semantic_confidence": 0.0 to 1.0,
-  "confirmation_message": "Short, crisp first-person confirmation",
-  "reasoning": "Brief explanation of interpretation"
-}`;
+  "intent": "QUERY" | "LOGGING",
+  "is_query": boolean,
+  "enhanced_text": "string",
+  "detected_category": "string",
+  "detected_entities": {},
+  "plan_updates": [],
+  "semantic_confidence": number,
+  "confirmation_message": "string",
+  "reasoning": "string"
+}
+`;
     }
 
     /**
@@ -139,13 +127,21 @@ Respond ONLY with valid JSON in this exact format:
             }
 
             const parsed = JSON.parse(jsonText);
+            const rawIntent = (parsed.intent || 'LOGGING').toUpperCase().trim();
+            const isQueryLLM = rawIntent === 'QUERY' || parsed.is_query === true;
+
+            // Deterministic signals for queries (Fallback/Safety)
+            const queryRegex = /^(what|when|where|how|did|have|who|which)\b/i;
+            const hasQuerySignal = queryRegex.test(rawText.trim());
 
             return {
+                intent: (isQueryLLM || hasQuerySignal) ? 'QUERY' : rawIntent,
+                is_query: isQueryLLM || hasQuerySignal,
                 enhanced_text: parsed.enhanced_text || rawText,
                 raw_text: rawText,
                 detected_category: parsed.detected_category || 'generic',
                 detected_entities: parsed.detected_entities || {},
-                plan_updates: parsed.plan_updates || [], // Extract plan updates
+                plan_updates: parsed.plan_updates || [],
                 semantic_confidence: parsed.semantic_confidence || 0.5,
                 confirmation_message: parsed.confirmation_message || parsed.enhanced_text || 'Logged',
                 reasoning: parsed.reasoning || ''
@@ -156,6 +152,8 @@ Respond ONLY with valid JSON in this exact format:
 
             // Return raw text as fallback
             return {
+                intent: 'LOGGING',
+                is_query: false,
                 enhanced_text: rawText,
                 raw_text: rawText,
                 detected_category: 'generic',

@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify from 'fastify'; // Restart Trigger
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
