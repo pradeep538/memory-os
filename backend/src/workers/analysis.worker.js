@@ -34,15 +34,25 @@ export default async function (jobOrJobs) {
             // 2. Generate Feed Items
             if (patternList.length > 0) {
                 const topPattern = patternList[0];
+                // Map Python's 'pattern_type' to 'type' if needed
+                const pType = topPattern.type || topPattern.pattern_type || topPattern.category || 'General';
+
                 const insight = {
                     type: 'pattern',
-                    title: `Pattern Detected: ${topPattern.type}`,
+                    title: `Pattern Detected: ${pType}`,
                     body: topPattern.description || `Trend in ${topPattern.category}.`,
                     data: {
                         pattern_id: topPattern.id,
                         confidence: topPattern.confidence
                     }
                 };
+
+                // Check if already exists
+                const exists = await feedService.checkPatternExists(userId, topPattern.id);
+                if (exists) {
+                    console.log(`   Stats: Feed item for pattern ${topPattern.id} already exists. Skipping.`);
+                    continue;
+                }
 
                 await feedService.createItem(userId, insight);
                 console.log(`📝 Created Feed Item: ${insight.title}`);

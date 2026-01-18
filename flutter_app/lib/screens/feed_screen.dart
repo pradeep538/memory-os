@@ -149,15 +149,20 @@ class _FeedScreenState extends State<FeedScreen> {
                 if (_latestFeedback != null) return const SizedBox.shrink();
 
                 if (inputProvider.state == InputState.success &&
-                    inputProvider.lastMemory != null) {
+                    (inputProvider.lastMemory != null ||
+                        inputProvider.lastFeedbackMessage != null)) {
                   return Positioned(
                     left: 0,
                     right: 0,
-                    bottom: AppSpacing.inputBarHeight + AppSpacing.lg,
+                    bottom: AppSpacing.inputBarHeight +
+                        AppSpacing.xl +
+                        20, // Extra padding to clear input bar
                     child: SuccessToast(
                       text: inputProvider.lastFeedbackMessage ??
                           inputProvider.lastMemory!.displayText,
-                      onUndo: () => inputProvider.undoLastMemory(),
+                      onUndo: inputProvider.lastMemory != null
+                          ? () => inputProvider.undoLastMemory()
+                          : null,
                     ),
                   );
                 }

@@ -123,7 +123,7 @@ class PatternDetectionService:
                     'peak_hour': int(peak_hour),
                     'concentration': round(concentration, 2),
                     'confidence': round(min(concentration, peak_count / 10), 2),
-                    'description': f"You usually {activity} around {int(peak_hour)}:00"
+                    'description': f"You usually {activity} around {datetime.strptime(str(int(peak_hour)), '%H').strftime('%I %p').lstrip('0')}"
                 })
         
         return sorted(patterns, key=lambda x: x['confidence'], reverse=True)

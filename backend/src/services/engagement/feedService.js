@@ -43,6 +43,21 @@ class FeedService {
         const result = await query(sql, [itemId, userId]);
         return result.rows[0];
     }
+
+    /**
+     * Check if a pattern feed item already exists for this pattern ID
+     */
+    async checkPatternExists(userId, patternId) {
+        const sql = `
+            SELECT id FROM feed_items 
+            WHERE user_id = $1 
+            AND type = 'pattern'
+            AND data->>'pattern_id' = $2
+            AND (expires_at IS NULL OR expires_at > NOW())
+        `;
+        const result = await query(sql, [userId, patternId]);
+        return result.rows.length > 0;
+    }
 }
 
 export default new FeedService();

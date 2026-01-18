@@ -30,8 +30,20 @@ class _EngagementFeedState extends State<EngagementFeed> {
   Future<void> _loadFeed() async {
     final items = await widget.engagementService.getFeed();
     if (mounted) {
+      // Deduplicate based on body text + title
+      final uniqueItems = <FeedItem>[];
+      final seenContent = <String>{};
+
+      for (var item in items) {
+        final key = '${item.title}|${item.body}';
+        if (!seenContent.contains(key)) {
+          seenContent.add(key);
+          uniqueItems.add(item);
+        }
+      }
+
       setState(() {
-        _items = items;
+        _items = uniqueItems;
         _isLoading = false;
       });
     }
@@ -86,7 +98,9 @@ class _EngagementFeedState extends State<EngagementFeed> {
                 child: ListTile(
                   leading: _getIcon(item.type),
                   title: Text(
-                    item.title,
+                    (item.title.isEmpty || item.title.contains('undefined'))
+                        ? _getDefaultTitle(item.type)
+                        : item.title,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(item.body),
@@ -115,6 +129,19 @@ class _EngagementFeedState extends State<EngagementFeed> {
         return const Icon(Icons.analytics, color: Colors.blue);
       default:
         return const Icon(Icons.article_outlined);
+    }
+  }
+
+  String _getDefaultTitle(String type) {
+    switch (type) {
+      case 'pattern':
+        return 'Pattern Detected';
+      case 'insight':
+        return 'New Insight';
+      case 'milestone':
+        return 'Milestone Reached';
+      default:
+        return 'Update';
     }
   }
 }
