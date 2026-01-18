@@ -12,12 +12,14 @@ class PatternDetectedWidget extends StatelessWidget {
   final Insight insight;
   final VoidCallback? onTap;
   final VoidCallback? onCreateHabit;
+  final VoidCallback? onDismiss;
 
   const PatternDetectedWidget({
     super.key,
     required this.insight,
     this.onTap,
     this.onCreateHabit,
+    this.onDismiss,
   });
 
   @override
@@ -68,6 +70,18 @@ class PatternDetectedWidget extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (onDismiss != null) ...[
+                const SizedBox(width: AppSpacing.sm),
+                IconButton(
+                  onPressed: onDismiss,
+                  icon: const Icon(Icons.close_rounded),
+                  iconSize: 20,
+                  color: AppColors.textTertiary,
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+              ],
             ],
           ),
 

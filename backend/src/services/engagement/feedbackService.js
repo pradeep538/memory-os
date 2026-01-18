@@ -24,11 +24,17 @@ class FeedbackService {
      */
     async getLatest(userId) {
         const sql = `
-            SELECT * FROM user_feedback
-            WHERE user_id = $1
-            AND created_at > NOW() - INTERVAL '5 minutes'
-            ORDER BY created_at DESC
-            LIMIT 1
+            UPDATE user_feedback
+            SET is_read = true
+            WHERE id = (
+                SELECT id FROM user_feedback
+                WHERE user_id = $1
+                AND is_read = false
+                AND created_at > NOW() - INTERVAL '5 minutes'
+                ORDER BY created_at DESC
+                LIMIT 1
+            )
+            RETURNING *
         `;
         const result = await query(sql, [userId]);
         return result.rows[0];

@@ -16,8 +16,8 @@ class PatternModel {
             isActionable
         } = patternData;
 
-        // Check if pattern already exists
-        const existing = await this.findByTypeAndCategory(userId, patternType, category);
+        // Check if pattern already exists (ignoring status)
+        const existing = await this.findAnyByTypeAndCategory(userId, patternType, category);
 
         if (existing) {
             // Update existing pattern
@@ -70,7 +70,7 @@ class PatternModel {
     }
 
     /**
-     * Find pattern by type and category
+     * Find pattern by type and category (Active Only)
      */
     static async findByTypeAndCategory(userId, patternType, category) {
         const query = `
@@ -79,6 +79,23 @@ class PatternModel {
         AND pattern_type = $2
         AND category = $3
         AND status = 'active'
+      ORDER BY last_validated_at DESC
+      LIMIT 1
+    `;
+
+        const result = await db.query(query, [userId, patternType, category]);
+        return result.rows[0];
+    }
+
+    /**
+     * Find pattern by type and category (Any Status)
+     */
+    static async findAnyByTypeAndCategory(userId, patternType, category) {
+        const query = `
+      SELECT * FROM patterns
+      WHERE user_id = $1 
+        AND pattern_type = $2
+        AND category = $3
       ORDER BY last_validated_at DESC
       LIMIT 1
     `;
@@ -131,6 +148,20 @@ class PatternModel {
 
         const result = await db.query(query, [userId]);
         return result.rows.length;
+    }
+
+    /**
+     * Dismiss a specific pattern
+     */
+    static async dismiss(patternId, userId) {
+        const query = `
+            UPDATE patterns
+            SET status = 'dismissed'
+            WHERE id = $1 AND user_id = $2
+            RETURNING *
+        `;
+        const result = await db.query(query, [patternId, userId]);
+        return result.rows[0];
     }
 }
 

@@ -118,6 +118,30 @@ class InsightsController {
             });
         }
     }
+
+    /**
+     * Dismiss an insight
+     * POST /api/v1/insights/:id/dismiss
+     */
+    async dismissInsight(request, reply) {
+        try {
+            const userId = request.userId;
+            const { id } = request.params;
+
+            await insightsService.dismissInsight(userId, id);
+
+            reply.send({
+                success: true,
+                message: 'Insight dismissed'
+            });
+        } catch (error) {
+            request.log.error(error);
+            reply.code(500).send({
+                success: false,
+                error: error.message
+            });
+        }
+    }
 }
 
 export default new InsightsController();

@@ -47,6 +47,7 @@ class FeedService {
         const sql = `
             SELECT * FROM feed_items
             WHERE user_id = $1
+            AND is_read = false
             AND (expires_at IS NULL OR expires_at > NOW())
             ORDER BY created_at DESC
             LIMIT $2

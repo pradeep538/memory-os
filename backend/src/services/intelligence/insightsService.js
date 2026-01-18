@@ -127,7 +127,8 @@ Now generate for the given pattern. Return ONLY the insight text, nothing else.
                 confidence: pattern.confidence || 0.7,
                 rawData: pattern,
                 isNew: true,
-                lastUpdated: storedPattern.last_validated_at
+                lastUpdated: storedPattern.last_validated_at,
+                status: storedPattern.status // Include status for filtering
             };
         });
 
@@ -136,7 +137,10 @@ Now generate for the given pattern. Return ONLY the insight text, nothing else.
         // 6. Clean up old patterns
         await PatternModel.cleanupStale(userId, 30);
 
-        return insights.sort((a, b) => b.confidence - a.confidence);
+        // Filter out dismissed patterns
+        return insights
+            .filter(i => i.status !== 'dismissed')
+            .sort((a, b) => b.confidence - a.confidence);
     }
 
     /**
@@ -154,9 +158,6 @@ Now generate for the given pattern. Return ONLY the insight text, nothing else.
         return this.getUserInsights(userId, true);
     }
 
-    /**
-     * Get patterns for user (raw pattern data)
-     */
     async getPatterns(userId) {
         // Get patterns from database
         const patterns = await PatternModel.findByUser(userId);
@@ -201,6 +202,13 @@ Now generate for the given pattern. Return ONLY the insight text, nothing else.
             created_at: p.created_at,
             last_validated_at: p.last_validated_at
         }));
+    }
+
+    /**
+     * Dismiss an insight/pattern
+     */
+    async dismissInsight(userId, insightId) {
+        return await PatternModel.dismiss(insightId, userId);
     }
 }
 

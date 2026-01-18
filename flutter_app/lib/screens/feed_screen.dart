@@ -340,6 +340,7 @@ class _FeedScreenState extends State<FeedScreen> {
           onTap: () => _navigateToPatterns(),
           onCreateHabit: () =>
               _createHabitFromInsight(widgetData.data as Insight),
+          onDismiss: () => feedProvider.dismissWidget(widgetData.id),
         );
 
       case FeedWidgetType.gapWarning:
@@ -400,6 +401,7 @@ class _FeedScreenState extends State<FeedScreen> {
               decoration: BoxDecoration(
                 color: AppColors.primaryLight.withOpacity(0.2),
                 shape: BoxShape.circle,
+                // shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.mic_rounded,

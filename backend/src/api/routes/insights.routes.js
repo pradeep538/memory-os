@@ -98,6 +98,29 @@ async function insightsRoutes(fastify, options) {
             }
         }
     }, insightsController.getPatterns.bind(insightsController));
+
+    // Dismiss insight
+    fastify.post('/:id/dismiss', {
+        schema: {
+            description: 'Dismiss an insight or pattern',
+            tags: ['insights'],
+            params: {
+                type: 'object',
+                properties: {
+                    id: { type: 'string', format: 'uuid' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                }
+            }
+        }
+    }, insightsController.dismissInsight.bind(insightsController));
 }
 
 export default insightsRoutes;

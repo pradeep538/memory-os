@@ -366,10 +366,34 @@ class FeedProvider extends ChangeNotifier {
     _widgets = newWidgets;
   }
 
-  /// Dismiss a widget temporarily
+  /// Dismiss a widget temporarily (and persist if applicable)
   void dismissWidget(String widgetId) {
+    final widget = _widgets.firstWhere(
+      (w) => w.id == widgetId,
+      orElse: () => FeedWidgetData(
+        type: FeedWidgetType.gapWarning,
+        id: '',
+        priority: 0,
+        lastUpdated: DateTime.now(),
+      ),
+    );
+
+    // Optimistically remove from UI
     _widgets = _widgets.where((w) => w.id != widgetId).toList();
     notifyListeners();
+
+    // Persist to backend
+    if (widget.type == FeedWidgetType.patternDetected) {
+      if (widget.data is Insight) {
+        final insight = widget.data as Insight;
+        _insightsService.dismissInsight(insight.id).then((response) {
+          if (!response.success) {
+            debugPrint('Failed to dismiss insight: ${response.error}');
+            // Optionally revert UI change, but for dismissal sticking with optimistic is usually better UX
+          }
+        });
+      }
+    }
   }
 
   /// Pin a widget to top

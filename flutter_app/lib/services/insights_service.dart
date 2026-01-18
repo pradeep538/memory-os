@@ -12,15 +12,18 @@ class InsightsService {
     return _client.get<List<Insight>>(
       '/insights',
       queryParams: {'refresh': refresh},
-      fromJson: (json) => (json as List).map((e) => Insight.fromJson(e)).toList(),
+      fromJson: (json) =>
+          (json as List).map((e) => Insight.fromJson(e)).toList(),
     );
   }
 
   /// Get insights for specific category
-  Future<ApiResponse<List<Insight>>> getCategoryInsights(String category) async {
+  Future<ApiResponse<List<Insight>>> getCategoryInsights(
+      String category) async {
     return _client.get<List<Insight>>(
       '/insights/category/$category',
-      fromJson: (json) => (json as List).map((e) => Insight.fromJson(e)).toList(),
+      fromJson: (json) =>
+          (json as List).map((e) => Insight.fromJson(e)).toList(),
     );
   }
 
@@ -28,7 +31,8 @@ class InsightsService {
   Future<ApiResponse<List<Insight>>> refreshInsights() async {
     return _client.post<List<Insight>>(
       '/insights/refresh',
-      fromJson: (json) => (json as List).map((e) => Insight.fromJson(e)).toList(),
+      fromJson: (json) =>
+          (json as List).map((e) => Insight.fromJson(e)).toList(),
     );
   }
 
@@ -37,7 +41,16 @@ class InsightsService {
     return _client.get<List<Pattern>>(
       '/insights/patterns',
       queryParams: {'refresh': refresh},
-      fromJson: (json) => (json as List).map((e) => Pattern.fromJson(e)).toList(),
+      fromJson: (json) =>
+          (json as List).map((e) => Pattern.fromJson(e)).toList(),
+    );
+  }
+
+  /// Dismiss an insight
+  Future<ApiResponse<void>> dismissInsight(String id) async {
+    return _client.post<void>(
+      '/insights/$id/dismiss',
+      body: {},
     );
   }
 }
