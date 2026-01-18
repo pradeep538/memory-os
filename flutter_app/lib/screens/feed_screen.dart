@@ -113,6 +113,12 @@ class _FeedScreenState extends State<FeedScreen> {
                 // Daily Brief (Engagement Feed) - Only show if Engagement Widget is NOT present (Onboarding state)
                 Consumer<FeedProvider>(
                   builder: (context, feedProvider, _) {
+                    // Prevent flicker: Don't show anything while loading initially
+                    if (feedProvider.isLoading &&
+                        feedProvider.widgets.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+
                     final hasEngagementScore = feedProvider.widgets.any(
                       (w) => w.type == FeedWidgetType.engagementScore,
                     );
